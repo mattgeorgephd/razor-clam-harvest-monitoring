@@ -1,0 +1,495 @@
+---
+title: "Razor Clam Recreational Harvest: Extraction and Effort-Expansion Recompute"
+author: "WDFW Razor Clam Program"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: show
+    df_print: paged
+params:
+  db_path: "C:/Data/Razor Clam Recreational Harvest Database iForms.accdb"
+  out_dir: "./output"
+  # --- impossible-value thresholds (set a cap to Inf to disable it) ---
+  max_clams_per_interview: 200      # WA limit is 15 clams/digger; a group rarely exceeds ~10 diggers
+  max_people_per_interview: 60
+  max_diggers_per_interview: 60
+  length_valid_min: 50              # mm; nullify shell lengths outside [min, max]
+  length_valid_max: 200
+  # --- correction factor review band (events outside are flagged, not dropped, unless drop_null_cf_events) ---
+  cf_flag_min: 0.10
+  cf_flag_max: 1.00
+  # --- behavior switches ---
+  impossible_value_action: "nullify"   # "nullify" = set bad value to NA, keep the row; "drop" = remove the row
+  dedup_exact_census: true             # TRUE removes exact-duplicate census rows (same EventID, LocationID,
+                                       #   NPeople, NLanterns, NCars); these are data-entry duplicates, not replicates
+  count_time_col: ""                   # name of a per-count time column in tbl_DiggerCounts, if one exists; when set
+                                       #   it is added to the duplicate key so counts at different times stay distinct.
+                                       #   No such column exists in the database as of this writing (see protocol).
+  remove_miswritten_census: true       # TRUE removes census rows where NCars >= NPeople * census_max_car_person_ratio,
+                                       #   i.e. per-group records mis-entered as censuses (only event 509 in this data)
+  census_max_car_person_ratio: 2       # a real census has more people than cars; a ratio this high is impossible
+  multi_count_handling: "sum"          # how to combine REMAINING (non-duplicate) multiple census rows at the
+                                       #   SAME (EventID, LocationID):
+                                       #   "sum"  = reproduce WDFW's stored pipeline
+                                       #   "mean" = treat them as replicate counts of one segment (CF-dependent; see protocol)
+  drop_null_cf_events: false           # TRUE removes events with no CorrectionFactor (their harvest is otherwise NA)
+  ppl_per_car_default: 2.67            # historical interview-derived average people-per-car; fallback in CalcPeople
+  season_cut_month: 7                  # months >= this start a new season-year (razor clam season is fall->spring)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Purpose
+
+This document extracts the **five raw tables** from the WDFW Razor Clam Recreational
+Harvest Access database and recomputes catch-per-unit-effort (CPUE), expanded effort,
+and total harvest **directly from the raw data**, using the agency's documented
+effort-expansion formulas (see the companion `Effort_Expansion_Protocol.md`).
+
+It deliberately does **not** read the database's stored derived tables
+(`Spreadsheet`, `CreelSumm`, `Creel Summary by Area`, `Wastage Summary`). Those are
+recomputed here from source because (a) they can be stale relative to the raw tables
+and (b) their sum columns are inflated by an internal join in the summary-build query
+(every creel sum is multiplied by the number of digger-count rows for the event; the
+ratio used for CPUE survives, but the totals are not usable as counts).
+
+Every row that is dropped, nullified, or flagged is written to an **audit log** so the
+estimates remain defensible.
+
+> The formula chain implemented below was verified offline: applied to the database's
+> own inputs it reproduces the stored `Spreadsheet` values for `CalcPeople`,
+> `EstCorEffort`, and `TotHarvest` to floating-point precision.
+
+# Requirements and connection notes
+
+- 64-bit R must be paired with the **64-bit** Microsoft Access Database Engine
+  (ACE) driver, or 32-bit R with the 32-bit driver. A bitness mismatch is the most
+  common `IM002 ... data source name not found` failure.
+- The `.accdb` is ACE14 (Access 2010+); the modern driver name is
+  `Microsoft Access Driver (*.mdb, *.accdb)`.
+
+```{r libs}
+need <- c("DBI", "odbc", "dplyr", "tidyr", "stringr", "lubridate", "readr", "tibble")
+miss <- need[!vapply(need, requireNamespace, logical(1), quietly = TRUE)]
+if (length(miss)) stop("Install missing packages: ", paste(miss, collapse = ", "))
+suppressPackageStartupMessages(lapply(need, library, character.only = TRUE))
+
+dir.create(params$out_dir, showWarnings = FALSE, recursive = TRUE)
+
+# Robust date parser: passes through native Date/POSIXct (the usual ODBC result) and
+# falls back to parsing character dates in ISO 'Y-m-d' or US 'm/d/y' form, with or
+# without a time component, returning NA for anything unparseable.
+as_date_safe <- function(x) {
+  if (inherits(x, "Date"))    return(x)
+  if (inherits(x, "POSIXct")) return(as.Date(x))
+  as.Date(lubridate::parse_date_time(
+    as.character(x), orders = c("Ymd HMS", "Ymd", "mdy HMS", "mdy"), quiet = TRUE))
+}
+```
+
+```{r audit-helper}
+# Accumulating audit log. Every cleaning action appends one row.
+.audit <- list()
+log_audit <- function(table, step, action, reason, n_rows, detail = "") {
+  .audit[[length(.audit) + 1]] <<- tibble(
+    table = table, step = step, action = action, reason = reason,
+    n_rows = as.integer(n_rows), detail = detail,
+    timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  )
+}
+audit_table <- function() if (length(.audit)) bind_rows(.audit) else tibble()
+```
+
+# 1. Extract the raw tables
+
+Explicit column lists avoid the empty `Field1`-`Field15` import artifacts and the Memo
+columns in `tbl_events`. `lut_Beach` is read as a small reference for beach identity and
+`LocationID` validation (it is a lookup, not one of the five data tables).
+
+```{r connect-extract}
+conn_str <- sprintf(
+  "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=%s;Uid=Admin;ReadOnly=1;",
+  params$db_path
+)
+con <- dbConnect(odbc::odbc(), .connection_string = conn_str)
+
+q <- function(sql) as_tibble(dbGetQuery(con, sql))
+
+events_raw <- q("SELECT EventID, BeachName, [Date], [Low Tide], TideHeight,
+                        CorrectionFactor, Sampler1
+                 FROM [tbl_events]")
+creel_raw  <- q("SELECT EventID, LocationID, CreelNPeople, CreelNDiggers, CreelNClams,
+                        CreelNLanterns, CreelNCars
+                 FROM [tbl_Creel]")
+dc_cols <- "EventID, LocationID, NPeople, NLanterns, NCars"
+if (nzchar(params$count_time_col)) dc_cols <- paste0(dc_cols, ", [", params$count_time_col, "]")
+dc_raw     <- q(paste0("SELECT ", dc_cols, " FROM [tbl_DiggerCounts]"))
+wast_raw   <- q("SELECT EventID, LocationID, NHoles, NClams, NMorts
+                 FROM [tbl_Wastage]")
+len_raw    <- q("SELECT EventID, LocationID, [Length] AS Length
+                 FROM [TBL Length]")
+lut_beach  <- q("SELECT LocationID, BeachName FROM [lut_Beach]")
+
+dbDisconnect(con)
+
+# raw counts -> audit
+for (nm in c("tbl_events","tbl_Creel","tbl_DiggerCounts","tbl_Wastage","TBL Length")) {
+  obj <- switch(nm, "tbl_events"=events_raw, "tbl_Creel"=creel_raw,
+                "tbl_DiggerCounts"=dc_raw, "tbl_Wastage"=wast_raw, "TBL Length"=len_raw)
+  log_audit(nm, "extract", "read", "raw rows pulled from Access", nrow(obj))
+}
+
+# normalize types
+to_num <- function(x) suppressWarnings(as.numeric(x))
+events_raw <- events_raw %>%
+  mutate(EventID = as.integer(EventID),
+         Date = as_date_safe(Date),
+         CorrectionFactor = to_num(CorrectionFactor),
+         TideHeight = to_num(TideHeight))
+creel_raw <- creel_raw %>% mutate(EventID = as.integer(EventID),
+         across(starts_with("Creel"), to_num), LocationID = as.character(LocationID))
+dc_raw <- dc_raw %>% mutate(EventID = as.integer(EventID),
+         across(c(NPeople, NLanterns, NCars), to_num), LocationID = as.character(LocationID))
+wast_raw <- wast_raw %>% mutate(EventID = as.integer(EventID),
+         across(c(NHoles, NClams, NMorts), to_num), LocationID = as.character(LocationID))
+len_raw <- len_raw %>% mutate(EventID = as.integer(EventID),
+         Length = to_num(Length), LocationID = as.character(LocationID))
+```
+
+# 2. Cleaning layer (audited)
+
+## 2.1 Canonical beach identity
+
+The event's stored `BeachName` is not normalized ("LongBeach" / "Long Beach" /
+"Longbeach" are one beach). We map to the `lut_Beach` canonical spelling. For
+child-level QC we also validate `LocationID` against `lut_Beach`.
+
+```{r beach-clean}
+canon_beach <- function(x) {
+  k <- str_to_lower(str_replace_all(as.character(x), "\\s+", ""))
+  dplyr::recode(k,
+    "longbeach"   = "LongBeach",
+    "twinharbors" = "Twin Harbors",
+    "copalis"     = "Copalis",
+    "mocrocks"    = "Mocrocks",
+    "kalaloch"    = "Kalaloch",
+    .default = NA_character_)
+}
+
+events <- events_raw %>% mutate(beach = canon_beach(BeachName))
+n_unmapped <- sum(is.na(events$beach))
+if (n_unmapped) log_audit("tbl_events", "normalize_beach", "flag",
+  "BeachName not mappable to a canonical beach", n_unmapped,
+  paste(unique(events_raw$BeachName[is.na(events$beach)]), collapse = "; "))
+
+valid_loc <- unique(as.character(lut_beach$LocationID))
+```
+
+## 2.2 Correction factor review
+
+`CorrectionFactor` drives effort expansion; out-of-band or missing values are flagged
+(and optionally the events dropped). A value > 1 is implausible if CF is the fraction of
+diggers present at count time.
+
+```{r cf-clean}
+cf_bad   <- with(events, !is.na(CorrectionFactor) &
+                   (CorrectionFactor < params$cf_flag_min | CorrectionFactor > params$cf_flag_max))
+cf_null  <- is.na(events$CorrectionFactor)
+if (any(cf_bad)) log_audit("tbl_events", "cf_review", "flag",
+  sprintf("CorrectionFactor outside [%.2f, %.2f]", params$cf_flag_min, params$cf_flag_max),
+  sum(cf_bad), paste(sort(unique(events$EventID[cf_bad])), collapse = ","))
+if (any(cf_null)) log_audit("tbl_events", "cf_review", "flag",
+  "CorrectionFactor missing (effort/harvest will be NA)", sum(cf_null),
+  paste(sort(events$EventID[cf_null]), collapse = ","))
+
+if (isTRUE(params$drop_null_cf_events) && any(cf_null)) {
+  log_audit("tbl_events", "cf_review", "drop", "drop_null_cf_events = TRUE", sum(cf_null))
+  events <- events %>% filter(!is.na(CorrectionFactor))
+}
+valid_eid <- unique(events$EventID)
+```
+
+## 2.3 Generic child cleaning: null/orphan keys, location validation
+
+```{r child-keys}
+clean_child_keys <- function(df, tbl) {
+  n0 <- nrow(df)
+  # null EventID -> unlinkable -> drop
+  nnull <- sum(is.na(df$EventID))
+  if (nnull) { log_audit(tbl, "keys", "drop", "EventID is NULL (unlinkable)", nnull)
+               df <- df %>% filter(!is.na(EventID)) }
+  # orphan EventID -> no parent in tbl_events -> drop
+  orph <- !(df$EventID %in% valid_eid)
+  if (any(orph)) { log_audit(tbl, "keys", "drop", "EventID has no parent in tbl_events",
+                             sum(orph), paste(sort(unique(df$EventID[orph])), collapse = ","))
+                   df <- df %>% filter(EventID %in% valid_eid) }
+  # bad LocationID -> flag only (event-level math keys on EventID, not LocationID)
+  if ("LocationID" %in% names(df)) {
+    badloc <- !(df$LocationID %in% valid_loc) & !is.na(df$LocationID) & df$LocationID != ""
+    if (any(badloc)) log_audit(tbl, "keys", "flag", "LocationID not in lut_Beach",
+                               sum(badloc),
+                               paste(utils::head(sort(unique(df$LocationID[badloc])), 20), collapse = ","))
+  }
+  df
+}
+
+creel <- clean_child_keys(creel_raw, "tbl_Creel")
+dc    <- clean_child_keys(dc_raw,    "tbl_DiggerCounts")
+wast  <- clean_child_keys(wast_raw,  "tbl_Wastage")
+len   <- clean_child_keys(len_raw,   "TBL Length")
+```
+
+## 2.3b Remove exact-duplicate census rows
+
+Some events have the same instantaneous count entered more than once (in a few cases an
+entire event's census was duplicated). These are data-entry duplicates, not replicate
+counts, and summing them double-counts effort. We drop exact duplicates on
+`(EventID, LocationID, NPeople, NLanterns, NCars)`, keeping one. Note: if replicate
+counts taken at different times could legitimately share identical values, add a time or
+comment field to this key; here counts are treated as duplicates when location and all
+count values match.
+
+```{r dedup}
+if (isTRUE(params$dedup_exact_census)) {
+  key <- c("EventID", "LocationID", "NPeople", "NLanterns", "NCars")
+  if (nzchar(params$count_time_col) && params$count_time_col %in% names(dc))
+    key <- c(key, params$count_time_col)
+  before <- nrow(dc)
+  dc <- dc %>% distinct(across(all_of(key)), .keep_all = TRUE)
+  removed <- before - nrow(dc)
+  if (removed) log_audit("tbl_DiggerCounts", "dedup", "drop",
+    paste0("exact-duplicate census row on (", paste(key, collapse = ", "), ")"),
+    removed, "kept one row per identical group")
+}
+```
+
+## 2.3c Repair mis-entered census rows
+
+A census row records people, cars, and lanterns on a beach segment, so it must have more
+people than cars. A handful of rows (in this data, only event 509) are per-group records
+typed into the census table by mistake, identifiable by an impossible car-to-people ratio
+(`NCars` set to `NPeople` times the bag limit). These are removed so they do not inflate
+the census. Note: removing them does not by itself produce a harvest estimate for an event
+that also lacks creel interviews (event 509 has none, so it remains without a CPUE and
+yields no harvest); it only cleans the effort census.
+
+```{r repair-census}
+if (isTRUE(params$remove_miswritten_census)) {
+  bad <- which(!is.na(dc$NPeople) & !is.na(dc$NCars) & dc$NPeople > 0 &
+               dc$NCars >= dc$NPeople * params$census_max_car_person_ratio)
+  if (length(bad)) {
+    log_audit("tbl_DiggerCounts", "repair", "drop",
+      sprintf("NCars >= NPeople * %s (per-group records mis-entered as census)",
+              params$census_max_car_person_ratio),
+      length(bad), paste0("events ", paste(sort(unique(dc$EventID[bad])), collapse = ",")))
+    dc <- dc[-bad, , drop = FALSE]
+  }
+}
+```
+
+## 2.4 Impossible numeric values
+
+`CreelNCars` is renamed to `ppl_per_car` (it stores people-per-car, not a vehicle
+count). Values above the configured caps are nullified (default) or their rows dropped.
+
+```{r impossible}
+creel <- creel %>% rename(ppl_per_car = CreelNCars)
+
+apply_cap <- function(df, col, cap, tbl) {
+  if (!is.finite(cap)) return(df)
+  hit <- which(!is.na(df[[col]]) & df[[col]] > cap)
+  if (!length(hit)) return(df)
+  vals <- paste(utils::head(sort(df[[col]][hit], decreasing = TRUE), 8), collapse = ",")
+  if (params$impossible_value_action == "drop") {
+    log_audit(tbl, "impossible", "drop", sprintf("%s > %s (row removed)", col, cap),
+              length(hit), vals)
+    df <- df[-hit, , drop = FALSE]
+  } else {
+    log_audit(tbl, "impossible", "nullify", sprintf("%s > %s (set to NA)", col, cap),
+              length(hit), vals)
+    df[[col]][hit] <- NA_real_
+  }
+  df
+}
+creel <- creel %>%
+  apply_cap("CreelNClams",   params$max_clams_per_interview,   "tbl_Creel") %>%
+  apply_cap("CreelNPeople",  params$max_people_per_interview,  "tbl_Creel") %>%
+  apply_cap("CreelNDiggers", params$max_diggers_per_interview, "tbl_Creel")
+
+# Length: nullify outside the biologically plausible band (length is not used in the
+# harvest calc but is cleaned and exported for length-frequency work)
+lbad <- which(!is.na(len$Length) &
+                (len$Length < params$length_valid_min | len$Length > params$length_valid_max))
+if (length(lbad)) {
+  log_audit("TBL Length", "impossible", "nullify",
+            sprintf("Length outside [%g, %g] mm", params$length_valid_min, params$length_valid_max),
+            length(lbad), paste(sort(unique(len$Length[lbad])), collapse = ","))
+  len$Length[lbad] <- NA_real_
+}
+```
+
+# 3. Recompute the effort-expansion chain
+
+All event-level rates come from the **cleaned raw creel**, not the stored summaries.
+
+## 3.1 Event-level creel rates
+
+```{r creel-rates}
+creel_event <- creel %>%
+  group_by(EventID) %>%
+  summarise(
+    SumClams    = sum(CreelNClams,    na.rm = TRUE),
+    SumDiggers  = sum(CreelNDiggers,  na.rm = TRUE),
+    SumPeople   = sum(CreelNPeople,   na.rm = TRUE),
+    SumLanterns = sum(CreelNLanterns, na.rm = TRUE),
+    AvgPplPerCar = mean(ppl_per_car,  na.rm = TRUE),  # NaN if no car data this event
+    n_interviews = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    CPUE            = ifelse(SumDiggers  > 0, SumClams   / SumDiggers,  NA_real_),
+    DiggersPeople   = ifelse(SumPeople   > 0, SumDiggers / SumPeople,   NA_real_),
+    DiggersLanterns = ifelse(SumLanterns > 0, SumDiggers / SumLanterns, NA_real_),
+    AvgPplPerCar    = ifelse(is.nan(AvgPplPerCar), NA_real_, AvgPplPerCar)
+  )
+```
+
+## 3.2 Per-census expansion (Spreadsheet grain)
+
+Each `tbl_DiggerCounts` row is expanded with the hierarchical `CalcPeople` rule, then
+multiplied through to `TotHarvest`. This reproduces the database's `Spreadsheet` rows.
+
+```{r expand}
+working <- dc %>%
+  left_join(events %>% select(EventID, beach, Date, CorrectionFactor), by = "EventID") %>%
+  left_join(creel_event %>% select(EventID, CPUE, DiggersPeople, DiggersLanterns, AvgPplPerCar),
+            by = "EventID") %>%
+  mutate(
+    CalcPeople = dplyr::case_when(
+      !is.na(NPeople)   ~ NPeople,
+      !is.na(NCars)     ~ NCars * AvgPplPerCar,
+      !is.na(NLanterns) ~ NLanterns * DiggersLanterns,
+      TRUE              ~ NCars * params$ppl_per_car_default
+    ),
+    EstCorEffort = CalcPeople * DiggersPeople / CorrectionFactor,
+    TotHarvest   = EstCorEffort * CPUE
+  )
+
+# transparency: report multiple census rows at the same (EventID, LocationID)
+multi <- working %>% count(EventID, LocationID) %>% filter(n > 1)
+if (nrow(multi)) log_audit("tbl_DiggerCounts", "grain", "flag",
+  sprintf("multiple census rows at same (EventID, LocationID); handling = '%s'", params$multi_count_handling),
+  sum(multi$n), paste0(nrow(multi), " segment-pairs; max ", max(multi$n), " rows; events ",
+                        paste(utils::head(sort(unique(multi$EventID)), 10), collapse = ",")))
+```
+
+## 3.3 Aggregate to event and beach-season
+
+`multi_count_handling` decides how replicate census rows at one segment combine:
+`"sum"` reproduces WDFW; `"mean"` averages replicate counts of a segment before
+summing across segments (recommended; the correction factor already accounts for
+within-day turnover).
+
+```{r aggregate}
+if (params$multi_count_handling == "mean") {
+  seg <- working %>% group_by(EventID, LocationID) %>%
+    summarise(EstCorEffort = mean(EstCorEffort, na.rm = TRUE),
+              TotHarvest   = mean(TotHarvest,   na.rm = TRUE), .groups = "drop")
+} else {
+  seg <- working %>% select(EventID, LocationID, EstCorEffort, TotHarvest)
+}
+
+wastage_event <- wast %>% group_by(EventID) %>%
+  summarise(SumMorts = sum(NMorts, na.rm = TRUE),
+            SumHoles = sum(NHoles, na.rm = TRUE), .groups = "drop") %>%
+  mutate(WastageRate = ifelse(SumHoles > 0, SumMorts / SumHoles, NA_real_))
+
+event_harvest <- seg %>%
+  group_by(EventID) %>%
+  summarise(EstCorEffort = sum(EstCorEffort, na.rm = TRUE),
+            TotHarvest   = sum(TotHarvest,   na.rm = TRUE), .groups = "drop") %>%
+  left_join(events %>% select(EventID, beach, Date, CorrectionFactor), by = "EventID") %>%
+  left_join(creel_event %>% select(EventID, CPUE, SumPeople, n_interviews), by = "EventID") %>%
+  left_join(wastage_event %>% select(EventID, WastageRate), by = "EventID") %>%
+  mutate(
+    Wastage      = TotHarvest * WastageRate,
+    PctInterviewed = ifelse(EstCorEffort > 0, SumPeople / EstCorEffort, NA_real_),
+    year  = lubridate::year(Date),
+    month = lubridate::month(Date),
+    season_year  = ifelse(month >= params$season_cut_month, year, year - 1L),
+    season_label = paste0(season_year, "-", substr(as.character(season_year + 1L), 3, 4))
+  )
+
+beach_season <- event_harvest %>%
+  filter(!is.na(beach)) %>%
+  group_by(beach, season_year, season_label) %>%
+  summarise(
+    n_events       = n(),
+    total_effort   = sum(EstCorEffort, na.rm = TRUE),
+    total_harvest  = sum(TotHarvest,   na.rm = TRUE),
+    total_wastage  = sum(Wastage,      na.rm = TRUE),
+    mean_cpue      = mean(CPUE,        na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(beach, season_year)
+```
+
+# 4. Outputs and audit
+
+```{r write}
+w <- function(x, f) readr::write_csv(x, file.path(params$out_dir, f))
+w(events,         "clean_events.csv")
+w(creel,          "clean_creel.csv")
+w(dc,             "clean_diggercounts.csv")
+w(wast,           "clean_wastage.csv")
+w(len,            "clean_length.csv")
+w(creel_event,    "creel_event_rates.csv")
+w(working,        "working_spreadsheet_grain.csv")
+w(event_harvest,  "harvest_by_event.csv")
+w(beach_season,   "harvest_by_beach_season.csv")
+
+audit <- audit_table()
+w(audit, "audit_log.csv")
+```
+
+```{r audit-summary}
+cat("Rows dropped / nullified / flagged by table and action:\n")
+audit %>% group_by(table, action) %>%
+  summarise(events_or_rows = sum(n_rows), n_actions = n(), .groups = "drop") %>%
+  arrange(table, action) %>% as.data.frame() %>% print(row.names = FALSE)
+```
+
+```{r preview}
+cat("\nHarvest by beach and season (head):\n")
+head(beach_season, 15)
+```
+
+# 5. Notes and known issues carried into the estimate
+
+- **Derived tables avoided.** All aggregates are recomputed from raw; the database's
+  stored summary tables are not used (stale, and their totals are inflated by a join).
+- **`CreelNCars` = people per car**, renamed `ppl_per_car`. Do not read it as a vehicle count.
+- **Exact-duplicate censuses removed.** Some events had a census entered twice (in a few
+  cases the whole event was duplicated, e.g. Twin Harbors events 2115, 2118, 2123, 2668);
+  `dedup_exact_census = TRUE` drops these. This alone corrects an ~16% overstatement of the
+  Twin Harbors 2022-23 season. The audit log records how many rows were removed.
+- **Multiple census rows per segment (after dedup).** A few events still have genuine
+  distinct counts at one segment (different values, likely different times). With
+  `multi_count_handling = "sum"` these are summed (WDFW behavior); `"mean"` averages them.
+  After deduplication this choice affects only ~0.25% of the all-time total, concentrated in
+  a handful of seasons, and is genuinely correction-factor-dependent. The mis-entered census
+  rows in event 509 (Long Beach) are now removed by `remove_miswritten_census`; that event
+  still yields no harvest because it has no creel interviews, so its census is corrected but
+  no CPUE exists to expand.
+- **Missing correction factors** leave an event's effort and harvest as `NA` unless
+  `drop_null_cf_events = TRUE` or a CF is imputed; the audit lists the affected events.
+- **Length** is cleaned and exported but is not part of the harvest calc; only ~16% of
+  events have length data.
+- All thresholds are `params` at the top; change them and re-knit. The audit log records
+  exactly what each setting removed or altered.
+```

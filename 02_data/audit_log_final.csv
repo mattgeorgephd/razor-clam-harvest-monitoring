@@ -1,0 +1,26 @@
+table,step,action,reason,n_rows,detail,timestamp
+tbl_events,extract,read,raw rows pulled from source,2682,,2026-06-27 01:08:24
+tbl_Creel,extract,read,raw rows pulled from source,53511,,2026-06-27 01:08:24
+tbl_DiggerCounts,extract,read,raw rows pulled from source,13789,,2026-06-27 01:08:24
+tbl_Wastage,extract,read,raw rows pulled from source,1023,,2026-06-27 01:08:24
+TBL Length,extract,read,raw rows pulled from source,11324,,2026-06-27 01:08:24
+tbl_events,normalize_beach,flag,BeachName not mappable to a canonical beach,1,NA,2026-06-27 01:08:25
+tbl_events,cf_review,flag,"CorrectionFactor outside [0.10, 1.00]",1,717,2026-06-27 01:08:25
+tbl_events,cf_review,flag,CorrectionFactor missing (effort/harvest will be NA),10,"286,622,703,704,1397,1504,1505,1506,1507,1508",2026-06-27 01:08:25
+tbl_Creel,keys,drop,EventID is NULL (unlinkable),5,,2026-06-27 01:08:25
+tbl_Creel,keys,drop,EventID has no parent in tbl_events,26,2002,2026-06-27 01:08:25
+tbl_Creel,keys,flag,LocationID not in lut_Beach,32,".426,1204,1205,1234,1245,126,1264,1265,152,222,22309*,22309+,223096,223309,2309,2312,232309,30,3009,3013",2026-06-27 01:08:25
+tbl_DiggerCounts,keys,drop,EventID is NULL (unlinkable),3,,2026-06-27 01:08:25
+tbl_DiggerCounts,keys,drop,EventID has no parent in tbl_events,4,2409,2026-06-27 01:08:25
+tbl_DiggerCounts,keys,flag,LocationID not in lut_Beach,1,526,2026-06-27 01:08:25
+tbl_Wastage,keys,drop,EventID has no parent in tbl_events,1,2410,2026-06-27 01:08:25
+tbl_Wastage,keys,flag,LocationID not in lut_Beach,1,32005,2026-06-27 01:08:25
+TBL Length,keys,drop,EventID has no parent in tbl_events,13,2597,2026-06-27 01:08:25
+TBL Length,keys,flag,LocationID not in lut_Beach,1,11322,2026-06-27 01:08:25
+tbl_DiggerCounts,dedup,drop,"exact-duplicate census row (same EventID, LocationID, NPeople, NLanterns, NCars)",118,kept one per identical group,2026-06-27 01:08:25
+tbl_DiggerCounts,repair,drop,NCars >= NPeople * 2 (per-group records mis-entered as census),26,events 509,2026-06-27 01:08:25
+tbl_Creel,impossible,nullify,CreelNClams > 200 (set to NA),23,"28576,24214,15526,6680,805,547,450,435",2026-06-27 01:08:25
+tbl_Creel,impossible,nullify,CreelNPeople > 60 (set to NA),15,"1928,1832,1068,668,414,284,126,126",2026-06-27 01:08:25
+tbl_Creel,impossible,nullify,CreelNDiggers > 60 (set to NA),11,"1928,1832,1068,668,460,284,97,89",2026-06-27 01:08:25
+TBL Length,impossible,nullify,"Length outside [50, 200] mm",1,1110,2026-06-27 01:08:25
+tbl_DiggerCounts,grain,flag,"multiple census rows at same (EventID, LocationID); handling = 'sum'",64,"32 segment-pairs; max 2 rows; events 50,81,106,233,679,746,1225,1322,1396,1521",2026-06-27 01:08:25
