@@ -1,0 +1,6 @@
+Type,Code
+"No Wind","1"
+"0-5 MPH","2"
+"5-15 MPH","3"
+"15-25 MPH","4"
+"Over 25 MPH","5"

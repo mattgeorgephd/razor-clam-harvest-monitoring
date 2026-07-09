@@ -1,0 +1,29 @@
+LocationID,BeachName,Description,IsPermanent
+"11101","LongBeach","Beard's Hollow to Seaview Approach",0
+"11104","LongBeach","Seaview Approach to Cranberry Approach",0
+"11200","LongBeach","Cranberry Approach to Klipsan Approach",0
+"12300","LongBeach","Klipsan Approach to Ocean Park Approach",0
+"12400","LongBeach","Ocean Park Approach to Oysterville Approach",0
+"12500","LongBeach","Oysterville Approach to South Boundary of Reserve",0
+"12600","LongBeach","South Boundary of Reserve to Leadbetter Point",0
+"21100","Twin Harbors","South of North Cove",0
+"21200","Twin Harbors","North Cove to County Line",0
+"22307","Twin Harbors","County Line to Grayland",0
+"22309","Twin Harbors","Grayland to Bonge",0
+"31002","Copalis","South of Taurus App",0
+"31005","Copalis","Taurus to Oyehut",0
+"32007","Copalis","Oyehut to QIN Resort",0
+"32009","Copalis","QIN Resort to Ocean City",0
+"33012","Copalis","Ocean City to Conner Creek",0
+"33013","Copalis","Conner Creek to Copalis River",0
+"41100","Mocrocks","South of Rocks",0
+"41200","Mocrocks","Copalis Rocks to Boone Creek",0
+"41300","Mocrocks","Boone Creek to Roosevelt Approach",0
+"41400","Mocrocks","Roosevelt Approach to Joe Creek",0
+"42500","Mocrocks","Joe Creek to Trestle Approach",0
+"42600","Mocrocks","Trestle Approach to Moclips Approach",0
+"Campground","Kalaloch",,0
+"Guard Rail","Kalaloch",,0
+"South Beach","Kalaloch",,0
+"Trail 1","Kalaloch",,0
+"Trail 2","Kalaloch",,0

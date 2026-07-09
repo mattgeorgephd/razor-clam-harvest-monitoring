@@ -1,0 +1,20 @@
+step,rows,detail
+beach names normalized,262,three spellings of Long Beach collapsed to lut_Beach canonical
+events with null beach,1,
+events with null date,1,
+drop creel: null EventID,5,
+drop diggercounts: null EventID,3,
+drop creel: orphan EventID,26,[np.float64(2002.0)]
+drop diggercounts: orphan EventID,4,[np.float64(2409.0)]
+drop wastage: orphan EventID,1,[np.int64(2410)]
+drop length: orphan EventID,13,[np.int64(2597)]
+nullify CreelNClams > 200,23,"impossible value; 15-clam limit, groups rarely >10 diggers"
+nullify CreelNPeople > 60,15,"impossible value; 15-clam limit, groups rarely >10 diggers"
+nullify CreelNDiggers > 60,11,"impossible value; 15-clam limit, groups rarely >10 diggers"
+"nullify shell length outside [50,200] mm",4,
+drop mis-entered census rows (NCars >= 2*NPeople),65,"EventIDs [np.int64(469), np.int64(509), np.int64(2590)]"
+drop exact-duplicate census rows,82,
+duplicate EVENTS dropped (overlapping segment sets on one beach-date),10,"[80, 477, 478, 479, 480, 481, 482, 483, 682, 1355]"
+beach-dates legitimately split across two events (disjoint segments),53,"Long Beach walks its 7 segments as a 4-segment and a 3-segment count, each its own EventID"
+CorrectionFactor > 1 set to NA,1,CF is a fraction of the day's diggers present at count time
+CorrectionFactor null,11,
