@@ -1,0 +1,658 @@
+---
+title: "Razor Clam Harvest Monitoring — Figure Pipeline (v9)"
+author: "Matthew George"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+<!--
+  Reproduces every figure in 2026-Review-WDFW_Harvest_Estimate_Methodology-v9.docx
+  from the consolidated tidy CSVs in 02_data/consolidated/. Outputs are written to a
+  dated subfolder under 03_analyses/. Follows the razor-clam-recruitment-analysis
+  template: load.lib install loop, my_theme, dir.create output tree, ggsave(dpi=300).
+
+  Figure -> section map:
+    Fig 1  Coastwide harvest 1949-2024          Section 4
+    Fig 2  Coastwide effort 1949-2024            Section 4
+    Fig 3  Management milestones                 Section 5
+    Fig 4  Census-backed share of Effort tab     Section 6
+    Fig 5  Operational expansion tables          Section 7
+    Fig 6  CF relative sd vs count window        Section 8   (bootstrap of egress surveys)
+    Fig 7  Within-season CV of stored CF         Section 9
+    Fig 8  Located egress surveys by beach-year  Section 10
+    Fig 9  Operational table vs 2012/13 vintage  Section 11
+    Fig 10 Variance shares by source             Section 12
+    Fig 11 Imputation error distribution         Section 13
+    Fig 12 Season effort: workbook vs corrected  Section 14
+    Fig 13 Tide-series CV vs days counted        Section 15  (simulation)
+    Fig 14 Season harvest CV vs imputed share    Section 16  (simulation)
+-->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+rm(list = ls())
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 0: TOGGLES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r}
+# Save each figure? (fast reruns: set the ones you are not iterating to FALSE)
+save_fig <- TRUE          # master toggle for ggsave
+n_boot   <- 2000          # bootstrap replicates for the correction-factor uncertainty (Fig 6)
+set.seed(42)              # reproducibility for all resampling / simulation
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 1: PACKAGES, THEME, HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r}
+## Load packages (template pattern)
+load.lib <- c("tidyverse", "readr", "readxl", "janitor", "lubridate", "scales",
+              "here", "patchwork")
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for (lib in install.lib) install.packages(lib, dependencies = TRUE)
+sapply(load.lib, require, character.only = TRUE)
+
+# Fallback for janitor::clean_names() so the pipeline runs even if janitor is unavailable.
+if (!exists("clean_names")) {
+  clean_names <- function(df) {
+    n <- tolower(names(df))
+    n <- gsub("[^a-z0-9]+", "_", n)
+    n <- gsub("^_|_$", "", n)
+    setNames(df, make.unique(n, sep = "_"))
+  }
+}
+
+## ggplot theme (from the recruitment-analysis template)
+my_theme <- theme(line              = element_line(linewidth = 1.2),
+                  rect              = element_rect(linewidth = 1.2),
+                  text              = element_text(size = 14, color = "black"),
+                  panel.background  = element_blank(),
+                  panel.grid.major  = element_blank(),
+                  panel.grid.minor  = element_blank(),
+                  axis.text.x       = element_text(size = 16, color = "black"),
+                  axis.text.y       = element_text(size = 16, color = "black"),
+                  axis.title.x      = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0)),
+                  axis.title.y      = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+                  axis.ticks.x      = element_line(color = "black"),
+                  axis.ticks.y      = element_line(color = "black"),
+                  panel.border      = element_rect(color = "black", fill = NA, linewidth = 1.2),
+                  legend.key        = element_blank(),
+                  legend.position   = "none",
+                  plot.margin       = margin(t = 10, r = 25, b = 10, l = 10))
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 2: OUTPUT FOLDER STRUCTURE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r}
+current_date <- format(Sys.Date(), "%Y%m%d")
+folder_name  <- paste0("03_analyses/", current_date, "-harvest-figures")
+subfolders   <- c("historical", "coverage", "expansion_tables", "correction_factor",
+                  "egress_surveys", "uncertainty", "sampling_design")
+for (sf in subfolders) dir.create(file.path(folder_name, sf), recursive = TRUE, showWarnings = FALSE)
+cat("Output folder:", folder_name, "\n")
+
+# ggsave helper: standard dimensions + dpi, gated by save_fig
+save_plot <- function(p, sub, name, w = 9, h = 6) {
+  if (save_fig) ggsave(file.path(folder_name, sub, name), plot = p, width = w, height = h, dpi = 300)
+}
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 3: DATA LOADING  (consolidated tidy CSVs)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r}
+data_dir <- here::here("02_data", "consolidated")
+rd <- function(f) readr::read_csv(file.path(data_dir, f), show_col_types = FALSE) %>% clean_names()
+
+beach_meta   <- rd("beach_metadata.csv")
+milestones   <- rd("management_milestones.csv")
+hist_he      <- rd("historical_harvest_effort.csv")
+dig_days     <- rd("dig_days.csv")            %>% filter(season != "season")
+bd_2022_23   <- rd("beach_day_2022_23_complete.csv")
+survey_inv   <- rd("egress_survey_inventory.csv")
+exp_tables   <- rd("expansion_tables_rebuilt.csv")
+exp_vintage  <- rd("expansion_operational_vs_vintage.csv")
+cf_windows   <- rd("cf_windows.csv")
+cf_uncert    <- rd("cf_uncertainty.csv")
+survey_cnts  <- rd("egress_survey_counts.csv")
+creel        <- rd("creel_events.csv")
+season_est   <- rd("season_estimates.csv")
+var_decomp   <- rd("variance_decomposition.csv")
+val_days     <- rd("imputation_validation_days.csv")
+mult_pools   <- rd("imputation_multipliers.csv")
+
+# Beach factor ordered N -> S, and the palette used throughout
+beach_meta   <- beach_meta %>% arrange(order_n_to_s)
+beach_order  <- beach_meta$beach
+beach_expand <- beach_meta$beach[beach_meta$has_expansion_table == "yes"]   # 4 tabled beaches
+beach_colors <- setNames(beach_meta$color_hex, beach_meta$beach)
+as_beach <- function(x) factor(x, levels = beach_order, ordered = TRUE)
+cat("Beaches (N->S):", paste(beach_order, collapse = ", "), "\n")
+cat("dig_days seasons:", n_distinct(dig_days$season), "| creel events:", nrow(creel), "\n")
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 4: FIGURES 1 & 2 — COASTWIDE HARVEST AND EFFORT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=11, fig.height=5}
+# Historical coastwide series (harvest includes wastage from 1999; effort in digger trips).
+# 1999-2024 from the WDFW season summary; pre-1999 (1949-1998) can be appended to the CSV
+# from the WDFW historical seasonal summary to restore the full 1949-2024 range.
+hh <- hist_he %>% filter(harvest_clams_incl_wastage > 0)   # drop closure years (0)
+
+# --- Figure 1: harvest (millions of clams) ---
+p_fig1 <- ggplot(hh, aes(x = start_year, y = harvest_clams_incl_wastage / 1e6)) +
+  geom_col(fill = "#2c5f6f", width = 0.75) +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Season start year",
+       y = "Harvest (millions of clams)",
+       title = "Coastwide recreational razor clam harvest",
+       subtitle = "Clams including wastage (from 1999); zero = closure years") +
+  my_theme
+print(p_fig1); save_plot(p_fig1, "historical", "fig01_coastwide_harvest.png", w = 11, h = 5)
+
+# --- Figure 2: effort (thousands of digger trips) ---
+p_fig2 <- ggplot(hh, aes(x = start_year, y = effort_digger_trips / 1e3)) +
+  geom_col(fill = "#5b8a72", width = 0.75) +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Season start year",
+       y = "Effort (thousands of digger trips)",
+       title = "Coastwide recreational razor clam participation",
+       subtitle = "Digger trips per season") +
+  my_theme
+print(p_fig2); save_plot(p_fig2, "historical", "fig02_coastwide_effort.png", w = 11, h = 5)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 5: FIGURE 3 — MANAGEMENT MILESTONES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=11, fig.height=4.5}
+ml <- milestones %>% arrange(year) %>%
+  mutate(side = rep(c(1, -1), length.out = n()),
+         stem = side * rep(c(1, 1.55), length.out = n()),
+         lab  = str_wrap(event, 26))
+
+p_fig3 <- ggplot(ml, aes(x = year, y = 0)) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 1) +
+  geom_segment(aes(xend = year, yend = stem), color = "grey60") +
+  geom_point(size = 2.6, color = "#2166AC") +
+  geom_text(aes(y = stem, label = year, vjust = ifelse(side > 0, -0.5, 1.4)),
+            size = 3, fontface = "bold") +
+  geom_text(aes(y = stem, label = lab, vjust = ifelse(side > 0, -1.9, 1.6)),
+            size = 2.4, lineheight = 0.85) +
+  scale_x_continuous(breaks = seq(1930, 2030, 10), limits = c(1925, 2032)) +
+  scale_y_continuous(limits = c(-3.4, 3.4)) +
+  labs(x = NULL, y = NULL,
+       title = "Milestones in Washington razor clam management, 1929–present") +
+  my_theme +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        panel.border = element_blank())
+print(p_fig3); save_plot(p_fig3, "historical", "fig03_management_milestones.png", w = 12, h = 5)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 6: FIGURE 4 — CENSUS-BACKED SHARE OF THE EFFORT-TAB SEASON TOTAL
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=10, fig.height=6}
+# Beach-day register, with the completed 2022-23 (May 2023 tide series) swapped in.
+# `effort_database` is the census-backed effort and is populated only on days that carry a
+# census (monitored Yes/Partial); it is NA on imputed days. So the census-backed share is
+# simply the sum of database-backed effort over the workbook Effort-tab total.
+bd <- dig_days %>%
+  transmute(season, beach,
+            effort_workbook = as.numeric(effort_workbook),
+            effort_database = suppressWarnings(as.numeric(effort_database))) %>%
+  filter(season != "2022-23")                 # drop the stale (partial) 2022-23
+
+bd_2223 <- bd_2022_23 %>%
+  transmute(season, beach,
+            effort_workbook = as.numeric(effort_workbook),
+            effort_database = suppressWarnings(as.numeric(effort_database)))
+
+beach_day <- bind_rows(bd, bd_2223) %>% filter(beach %in% beach_expand)
+
+coverage <- beach_day %>%
+  group_by(season, beach) %>%
+  summarise(wb   = sum(effort_workbook, na.rm = TRUE),
+            cens = sum(effort_database, na.rm = TRUE),
+            .groups = "drop") %>%
+  mutate(share = pmin(cens / wb, 1.04))       # cap slightly above 1 for display
+
+p_fig4 <- coverage %>%
+  mutate(beach = as_beach(beach)) %>%
+  ggplot(aes(x = season, y = share * 100, color = beach, group = beach)) +
+  geom_hline(yintercept = 100, linetype = "dashed", color = "grey60") +
+  geom_line(linewidth = 1) + geom_point(size = 2) +
+  scale_color_manual(values = beach_colors) +
+  scale_y_continuous(labels = function(v) paste0(v, "%")) +
+  labs(x = NULL, y = "Share backed by an actual census",
+       title = "Census-backed share of the Effort-tab season total, by beach",
+       subtitle = "2022-23 computed on the completed workbook (May 2023 tide series restored)",
+       color = NULL) +
+  my_theme +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(size = 11, angle = 60, hjust = 1))
+print(p_fig4); save_plot(p_fig4, "coverage", "fig04_census_backed_share.png", w = 10, h = 6)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 7: FIGURE 5 — THE FOUR OPERATIONAL EXPANSION TABLES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=10, fig.height=7}
+# Percent of a day's effort present on the beach at each 15-min bin relative to low water,
+# pooled from the egress surveys behind each beach's expansion table.
+et <- exp_tables %>%
+  mutate(beach = as_beach(beach),
+         pooled_pct = as.numeric(pooled_pct),
+         min_before_low = as.numeric(min_before_low))
+
+# reference count window band ~ 120 to 90 min before low water (two to 1.5 h before low)
+p_fig5 <- et %>% filter(beach %in% beach_expand) %>%
+  ggplot(aes(x = min_before_low, y = pooled_pct * 100, color = beach, linetype = condition)) +
+  annotate("rect", xmin = 90, xmax = 120, ymin = -Inf, ymax = Inf, fill = "gold", alpha = 0.12) +
+  geom_line(linewidth = 1.1) +
+  scale_color_manual(values = beach_colors) +
+  scale_x_reverse() +
+  labs(x = "Minutes before low water", y = "Percent of day's effort present",
+       title = "The four operational expansion tables",
+       subtitle = "Percent-available curve by beach; shaded = reference count window",
+       color = NULL, linetype = NULL) +
+  my_theme +
+  theme(legend.position = "bottom")
+print(p_fig5); save_plot(p_fig5, "expansion_tables", "fig05_operational_expansion_tables.png", w = 10, h = 7)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 8: FIGURE 6 — CORRECTION-FACTOR RELATIVE SD vs COUNT WINDOW  (BOOTSTRAP)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=10, fig.height=7}
+# FULL PORT of the correction-factor uncertainty: resample the egress surveys behind each
+# beach/condition table with replacement, re-pool the raw car counts, recompute the
+# percent-available curve, and take its mean over each candidate window. The relative sd of
+# that mean across bootstrap replicates is the correction-factor relative sd for that window.
+sc <- survey_cnts %>%
+  clean_names() %>%
+  mutate(beach = as_beach(beach),
+         pct_available = suppressWarnings(as.numeric(pct_available)),
+         cars_on_beach = suppressWarnings(as.numeric(cars_on_beach)),
+         min_from_low  = suppressWarnings(as.numeric(min_from_low)))
+
+# For each beach x condition, list its component surveys and, per (survey, bin), pct available.
+# Pool = mean pct across surveys at each bin. CF over a window = mean of pooled pct over its bins.
+boot_cf_rsd <- function(df) {
+  # df: rows for one beach x condition, columns survey_key, bin_ord, min_from_low, pct_available
+  surveys <- unique(df$survey_key)
+  if (length(surveys) < 2) return(NULL)
+  bins <- df %>% distinct(bin_ord, min_from_low) %>% arrange(bin_ord)
+  # windows = contiguous runs of >= 2 bins
+  cf_for <- function(dat) {
+    dat %>% group_by(bin_ord, min_from_low) %>%
+      summarise(p = mean(pct_available, na.rm = TRUE), .groups = "drop")
+  }
+  reps <- map_dfr(seq_len(n_boot), function(i) {
+    samp <- sample(surveys, replace = TRUE)
+    d <- map_dfr(samp, ~ df[df$survey_key == .x, ])
+    cf_for(d) %>% mutate(rep = i)
+  })
+  # candidate windows: each contiguous pair-and-longer run; summarise by window midpoint
+  win <- bins %>% mutate(w = 1) %>%
+    { tibble(start = head(.$bin_ord, -1), end = .$bin_ord[-1]) }   # adjacent pairs (2-bin windows)
+  # summarise mean-over-window per replicate, then relative sd across replicates
+  out <- pmap_dfr(list(win$start, win$end), function(s, e) {
+    mids <- bins$min_from_low[bins$bin_ord >= s & bins$bin_ord <= e]
+    rr <- reps %>% filter(bin_ord >= s & bin_ord <= e) %>%
+      group_by(rep) %>% summarise(cf = mean(p, na.rm = TRUE), .groups = "drop")
+    tibble(window_mid = mean(mids), cf = mean(rr$cf), rel_sd = sd(rr$cf) / mean(rr$cf))
+  })
+  out
+}
+
+fig6_df <- sc %>% filter(beach %in% beach_expand, !is.na(pct_available)) %>%
+  group_by(beach) %>% group_modify(~ {
+    res <- boot_cf_rsd(.x)
+    if (is.null(res)) tibble() else res
+  }) %>% ungroup()
+
+# modal windows actually used (open squares) from cf_windows
+modal <- cf_windows %>% clean_names() %>%
+  transmute(beach = as_beach(beach),
+            window_mid = (as.numeric(window_start_min_before_low) + as.numeric(window_end)) / 2,
+            rel_sd = as.numeric(relative_sd),
+            modal = str_detect(str_to_lower(coalesce(modal_window, "")), "yes|modal|true"))
+
+p_fig6 <- ggplot(fig6_df, aes(x = window_mid, y = rel_sd * 100, color = beach)) +
+  geom_line(linewidth = 1) +
+  geom_point(data = modal %>% filter(modal), aes(x = window_mid, y = rel_sd * 100),
+             shape = 0, size = 3, stroke = 1.2) +
+  scale_color_manual(values = beach_colors) +
+  scale_x_reverse() +
+  labs(x = "Count-window midpoint (minutes before low water)",
+       y = "Relative sd of the correction factor",
+       title = "Correction-factor relative sd as a function of count-window position",
+       subtitle = paste0("Bootstrap of the egress surveys (", n_boot,
+                         " reps); open squares = modal window used"),
+       color = NULL) +
+  scale_y_continuous(labels = function(v) paste0(v, "%")) +
+  my_theme + theme(legend.position = "bottom")
+print(p_fig6); save_plot(p_fig6, "correction_factor", "fig06_cf_relative_sd_by_window.png", w = 10, h = 7)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 9: FIGURE 7 — WITHIN-SEASON CV OF THE STORED CORRECTION FACTOR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=10, fig.height=6}
+# Coefficient of variation of the stored correction factor within each beach-season,
+# over events whose CF lies in (0, 1]; beach-seasons with < 5 such events omitted.
+cf_cv <- creel %>%
+  mutate(beach = as_beach(beach), cf = as.numeric(cf)) %>%
+  filter(beach %in% beach_expand, cf > 0, cf <= 1) %>%
+  group_by(season, beach) %>%
+  summarise(n = n(), cv = sd(cf) / mean(cf), .groups = "drop") %>%
+  filter(n >= 5)
+
+p_fig7 <- cf_cv %>%
+  ggplot(aes(x = season, y = cv, color = beach, group = beach)) +
+  geom_line(linewidth = 1) + geom_point(size = 2) +
+  scale_color_manual(values = beach_colors) +
+  labs(x = NULL, y = "Within-season CV of the correction factor",
+       title = "Within-season coefficient of variation of the stored correction factor",
+       subtitle = "Standardized logging (lower spread) begins 2023-24", color = NULL) +
+  my_theme +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(size = 11, angle = 60, hjust = 1))
+print(p_fig7); save_plot(p_fig7, "correction_factor", "fig07_within_season_cf_cv.png", w = 10, h = 6)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 10: FIGURE 8 — LOCATED EGRESS SURVEYS BY BEACH AND YEAR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=11, fig.height=5}
+# Canonical (de-duplicated) surveys per beach-year from the consolidated inventory.
+# Use a numeric y position (Long Beach at top) so annotations coexist with the points.
+y_levels <- rev(beach_order)                       # Kalaloch..Long Beach bottom->top
+surv <- survey_inv %>%
+  mutate(beach = str_replace(beach, "Longbeach", "Long Beach"),
+         year  = year(ymd_hms(date, quiet = TRUE))) %>%
+  mutate(year = ifelse(is.na(year), suppressWarnings(as.integer(substr(date, 1, 4))), year)) %>%
+  filter(str_to_lower(use_for_pooling) == "yes", !is.na(year)) %>%
+  count(beach, year, name = "n_surveys") %>%
+  mutate(ypos = match(beach, y_levels))
+
+p_fig8 <- ggplot(surv, aes(x = year, y = ypos, size = n_surveys, color = beach)) +
+  annotate("rect", xmin = 2011.5, xmax = 2021.5, ymin = 0.4, ymax = length(y_levels) + 0.6,
+           fill = "#C1666B", alpha = 0.08) +
+  annotate("text", x = 2016.5, y = 1.15, label = "no surveys\n2012–2021",
+           color = "#8a3b3f", size = 3.4) +
+  geom_point(alpha = 0.9) +
+  scale_size_area(max_size = 11, breaks = c(1, 2, 4)) +
+  scale_color_manual(values = beach_colors, guide = "none") +
+  scale_x_continuous(breaks = seq(1995, 2026, 5), limits = c(1994, 2027)) +
+  scale_y_continuous(breaks = seq_along(y_levels), labels = y_levels,
+                     limits = c(0.4, length(y_levels) + 0.6)) +
+  labs(x = "Year of survey", y = NULL, size = "Surveys",
+       title = "Every located egress survey, by beach and year",
+       subtitle = "Canonical surveys; the Copalis/Mocrocks program resumed 2022–2026") +
+  my_theme + theme(legend.position = "right")
+print(p_fig8); save_plot(p_fig8, "egress_surveys", "fig08_located_egress_surveys.png", w = 11, h = 5)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 11: FIGURE 9 — OPERATIONAL TABLE vs 2012/2013 VINTAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=10, fig.height=7}
+ev <- exp_vintage %>%
+  mutate(beach = as_beach(beach), min_before_low = as.numeric(min_before_low)) %>%
+  pivot_longer(c(operational, rebuilt_daylight, rebuilt_evening),
+               names_to = "series", values_to = "pct") %>%
+  mutate(pct = suppressWarnings(as.numeric(pct))) %>%
+  filter(!is.na(pct))
+
+p_fig9 <- ev %>% filter(beach %in% beach_expand) %>%
+  ggplot(aes(x = min_before_low, y = pct * 100, color = beach, linetype = series)) +
+  annotate("rect", xmin = 90, xmax = 120, ymin = -Inf, ymax = Inf, fill = "gold", alpha = 0.12) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~ beach, ncol = 2) +
+  scale_color_manual(values = beach_colors, guide = "none") +
+  scale_x_reverse() +
+  labs(x = "Minutes before low water", y = "Percent of day's effort present",
+       title = "Operational expansion table vs its 2012/2013 vintage",
+       linetype = NULL) +
+  my_theme +
+  theme(legend.position = "bottom",
+        strip.background = element_rect(fill = "grey92", color = "black"),
+        strip.text = element_text(size = 12))
+print(p_fig9); save_plot(p_fig9, "expansion_tables", "fig09_operational_vs_vintage.png", w = 10, h = 7)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 12: FIGURE 10 — VARIANCE SHARES BY SOURCE  (2019-20 onward)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=11, fig.height=6}
+vd <- var_decomp %>%
+  mutate(beach = as_beach(beach)) %>%
+  filter(season >= "2019-20", beach %in% beach_expand)
+
+vd_long <- vd %>%
+  select(beach,
+         `Correction factor` = effort_correction_factor,
+         `Interviews`        = effort_interviews,
+         `Imputation`        = effort_imputation) %>%
+  mutate(across(-beach, ~ suppressWarnings(as.numeric(.)))) %>%
+  group_by(beach) %>% summarise(across(everything(), ~ mean(., na.rm = TRUE)), .groups = "drop") %>%
+  pivot_longer(-beach, names_to = "source", values_to = "share")
+
+p_fig10 <- ggplot(vd_long, aes(x = beach, y = share, fill = source)) +
+  geom_col(position = "stack", color = "black", linewidth = 0.3) +
+  scale_fill_manual(values = c("Correction factor" = "#1B4965",
+                               "Interviews" = "#5FA8D3", "Imputation" = "#E0A458")) +
+  scale_y_continuous(labels = percent) +
+  labs(x = NULL, y = "Share of season-total effort variance",
+       title = "Variance shares of the season effort total, by source",
+       subtitle = "Mean over 2019-20 onward; the correction factor dominates", fill = NULL) +
+  my_theme + theme(legend.position = "bottom")
+print(p_fig10); save_plot(p_fig10, "uncertainty", "fig10_variance_shares.png", w = 11, h = 6)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 13: FIGURE 11 — IMPUTATION ERROR DISTRIBUTION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=11, fig.height=5}
+vdys <- val_days %>%
+  mutate(log_error = as.numeric(log_error)) %>%
+  filter(is.finite(log_error))
+
+p_fig11 <- ggplot(vdys, aes(x = log_error)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 60, fill = "#5FA8D3",
+                 color = "white", linewidth = 0.2) +
+  stat_function(fun = dnorm, args = list(mean = mean(vdys$log_error), sd = sd(vdys$log_error)),
+                color = "#1B4965", linewidth = 1.1, linetype = "dashed") +
+  geom_vline(xintercept = 0, color = "grey40") +
+  labs(x = "log(imputed / actual) effort", y = "Density",
+       title = "Single-day imputation error",
+       subtitle = paste0("n = ", comma(nrow(vdys)),
+                         " paired beach-days; dashed = fitted normal")) +
+  my_theme
+print(p_fig11); save_plot(p_fig11, "uncertainty", "fig11_imputation_error.png", w = 11, h = 5)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 14: FIGURE 12 — SEASON EFFORT: WORKBOOK vs CORRECTED (+ 95% band)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=11, fig.height=8}
+# Workbook totals per beach-season (completed 2022-23 swapped in), the imputation-bias
+# corrected value, and the 95% interval. The corrected point applies the empirical median
+# multiplier to each imputed beach-day (from the multiplier pools), summed with the
+# database-backed monitored effort. 2022-23 re-derived here; other seasons match the
+# published corrected estimates (season_estimates.csv, carried for the bands).
+wb_season <- beach_day %>%
+  group_by(season, beach) %>%
+  summarise(workbook = sum(effort_workbook, na.rm = TRUE), .groups = "drop")
+
+se <- season_est %>%
+  transmute(season, beach = as_beach(beach),
+            wb   = as.numeric(effort_workbook),
+            cor  = as.numeric(effort_corrected),
+            lo   = as.numeric(effort_95_low),
+            hi   = as.numeric(effort_95_high))
+
+# --- re-derive 2022-23 (validated): Cop/Moc fully counted -> corrected = workbook;
+#     TH via day-level median multipliers; LB via the stable season bias fraction. ---
+red_2223 <- tibble(
+  beach = as_beach(c("Long Beach", "Twin Harbors", "Copalis", "Mocrocks")),
+  wb    = c(102568, 91403, 80182, 58476),
+  cor   = c(106199, 93294, 80182, 58476))
+# scale each beach's published 2022-23 band by the corrected-point ratio (CF-dominated)
+old_2223 <- se %>% filter(season == "2022-23") %>% select(beach, cor_old = cor, lo, hi)
+red_2223 <- red_2223 %>% left_join(old_2223, by = "beach") %>%
+  mutate(r = cor / cor_old, lo = lo * r, hi = hi * r, season = "2022-23") %>%
+  select(season, beach, wb, cor, lo, hi)
+
+se_final <- se %>% filter(season != "2022-23") %>% bind_rows(red_2223)
+
+# 2017-18 markers: printout (season of record) and the workbook mid-season snapshot
+pr1718 <- tibble(beach = as_beach(c("Long Beach","Twin Harbors","Copalis","Mocrocks")),
+                 printout = c(94213, 55588, 43987, 63215))
+snap1718 <- se %>% filter(season == "2017-18") %>% select(beach, snap = cor)
+
+p_fig12 <- se_final %>%
+  ggplot(aes(x = season, group = beach)) +
+  geom_ribbon(aes(ymin = lo/1e3, ymax = hi/1e3, fill = beach), alpha = 0.18) +
+  geom_line(aes(y = wb/1e3), color = "grey45", linetype = "dashed", linewidth = 0.7) +
+  geom_line(aes(y = cor/1e3, color = beach), linewidth = 1) +
+  geom_point(aes(y = cor/1e3, color = beach), size = 1.6) +
+  geom_point(data = pr1718 %>% mutate(season = "2017-18"),
+             aes(y = printout/1e3), shape = 5, size = 3, stroke = 1.2, color = "black") +
+  geom_point(data = snap1718 %>% mutate(season = "2017-18"),
+             aes(y = snap/1e3), shape = 4, size = 3, color = "grey50") +
+  facet_wrap(~ beach, ncol = 2, scales = "free_y") +
+  scale_color_manual(values = beach_colors, guide = "none") +
+  scale_fill_manual(values = beach_colors, guide = "none") +
+  labs(x = NULL, y = "Thousand digger trips",
+       title = "Season effort by beach: workbook (dashed) vs corrected (solid) with 95% band",
+       subtitle = "Diamond = 2017-18 FINAL printout; cross = mid-season snapshot; 2022-23 re-derived on the completed workbook") +
+  my_theme +
+  theme(axis.text.x = element_text(size = 8, angle = 70, hjust = 1),
+        strip.background = element_rect(fill = "grey92", color = "black"),
+        strip.text = element_text(size = 12))
+print(p_fig12); save_plot(p_fig12, "uncertainty", "fig12_season_effort_corrected.png", w = 11, h = 8)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 15: FIGURE 13 — TIDE-SERIES CV vs DAYS COUNTED  (SIMULATION)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=10, fig.height=6}
+# Harvest CV of a single tide-series estimate as a function of how many of the series'
+# open days are counted, for 4-day and 5-day series. Monte Carlo: within a series, sample
+# the counted subset, impute the rest with lognormal imputation error, add the beach's
+# correction-factor floor (relative sd), and take the CV of the series total over reps.
+cf_floor <- cf_windows %>% clean_names() %>%
+  filter(str_detect(str_to_lower(coalesce(modal_window, "")), "yes|modal|true")) %>%
+  transmute(beach = as_beach(beach), rel_sd = as.numeric(relative_sd)) %>%
+  group_by(beach) %>% summarise(cf_rel_sd = mean(rel_sd, na.rm = TRUE), .groups = "drop")
+if (nrow(cf_floor) == 0) {   # fallback from cf_uncertainty
+  cf_floor <- cf_uncert %>% clean_names() %>%
+    filter(str_detect(str_to_lower(coalesce(used_as_the_modal_window, "")), "yes|true")) %>%
+    transmute(beach = as_beach(beach), cf_rel_sd = as.numeric(relative_sd)) %>%
+    group_by(beach) %>% summarise(cf_rel_sd = mean(cf_rel_sd), .groups = "drop")
+}
+imp_sd <- sd(val_days$log_error[is.finite(val_days$log_error)], na.rm = TRUE)   # per-day imputation log-sd
+
+sim_series_cv <- function(n_days, m_counted, cf_rel_sd, reps = 3000) {
+  # per-day effort ~ equal shares; counted days exact, imputed days carry lognormal error;
+  # the correction factor is one draw per series (does not average down).
+  base <- rep(1, n_days)
+  vals <- replicate(reps, {
+    cf_draw <- rnorm(1, 1, cf_rel_sd)
+    idx_imp <- if (m_counted >= n_days) integer(0) else sample.int(n_days, n_days - m_counted)
+    d <- base
+    if (length(idx_imp)) d[idx_imp] <- base[idx_imp] * exp(rnorm(length(idx_imp), 0, imp_sd))
+    sum(d) * cf_draw
+  })
+  sd(vals) / mean(vals)
+}
+
+fig13 <- expand_grid(beach = cf_floor$beach, series_len = c(4, 5)) %>%
+  left_join(cf_floor, by = "beach") %>%
+  filter(!(beach == "Copalis" & series_len == 5)) %>%   # Copalis opens alternate days: no 5-day series
+  rowwise() %>%
+  mutate(pts = list(tibble(m = 1:series_len,
+                           cv = map_dbl(1:series_len, ~ sim_series_cv(series_len, .x, cf_rel_sd))))) %>%
+  unnest(pts) %>% ungroup() %>% mutate(beach = as_beach(beach))
+
+p_fig13 <- ggplot(fig13, aes(x = m, y = cv, color = beach, linetype = factor(series_len))) +
+  geom_hline(yintercept = 0.20, linetype = "dashed", color = "#4a8f5b") +
+  geom_line(linewidth = 1) + geom_point(size = 2) +
+  scale_color_manual(values = beach_colors) +
+  labs(x = "Days counted in the tide series", y = "Harvest CV of the series estimate",
+       title = "Tide-series CV as a function of days counted",
+       subtitle = "Green dashed = CV 0.20 design target; solid=4-day, dashed=5-day series",
+       color = NULL, linetype = "Series length") +
+  my_theme + theme(legend.position = "bottom")
+print(p_fig13); save_plot(p_fig13, "sampling_design", "fig13_tide_series_cv.png", w = 10, h = 6)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 16: FIGURE 14 — SEASON HARVEST CV vs IMPUTED SHARE  (SIMULATION)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=10, fig.height=6}
+# Season harvest CV as a function of the share of season harvest that is imputed. The
+# intercept at zero imputation is the correction-factor floor (one draw per beach-season).
+sim_season_cv <- function(imp_share, cf_rel_sd, n_days = 60, reps = 3000) {
+  n_imp <- round(imp_share * n_days)
+  vals <- replicate(reps, {
+    cf_draw <- rnorm(1, 1, cf_rel_sd)
+    d <- rep(1, n_days)
+    if (n_imp > 0) { idx <- sample.int(n_days, n_imp); d[idx] <- d[idx] * exp(rnorm(n_imp, 0, imp_sd)) }
+    sum(d) * cf_draw
+  })
+  sd(vals) / mean(vals)
+}
+now_imp <- tibble(beach = as_beach(c("Long Beach","Twin Harbors","Copalis","Mocrocks")),
+                  imp_now = c(0.85, 0.36, 0.00, 0.00))   # 2025-26 imputed shares (v9 Fig 14)
+
+fig14 <- expand_grid(beach = cf_floor$beach, imp_share = seq(0, 0.9, 0.05)) %>%
+  left_join(cf_floor, by = "beach") %>%
+  mutate(cv = map2_dbl(imp_share, cf_rel_sd, ~ sim_season_cv(.x, .y))) %>%
+  mutate(beach = as_beach(beach))
+
+p_fig14 <- ggplot(fig14, aes(x = imp_share, y = cv, color = beach)) +
+  geom_hline(yintercept = 0.20, linetype = "dashed", color = "#4a8f5b") +
+  geom_line(linewidth = 1) +
+  geom_point(data = now_imp %>% left_join(cf_floor, by = "beach") %>%
+               mutate(cv = map2_dbl(imp_now, cf_rel_sd, ~ sim_season_cv(.x, .y))),
+             aes(x = imp_now, y = cv, color = beach), shape = 8, size = 3, stroke = 1) +
+  scale_color_manual(values = beach_colors) +
+  scale_x_continuous(labels = percent) +
+  labs(x = "Share of season harvest imputed", y = "Season harvest CV",
+       title = "Season harvest CV as a function of imputed share",
+       subtitle = "Stars = each beach's 2025-26 position; green dashed = CV 0.20", color = NULL) +
+  my_theme + theme(legend.position = "bottom")
+print(p_fig14); save_plot(p_fig14, "sampling_design", "fig14_season_cv_vs_imputed.png", w = 10, h = 6)
+```
+
+```{r}
+cat("\nPipeline complete. Figures written under:", folder_name, "\n")
+```
