@@ -1,0 +1,170 @@
+Beach,Condition,Bin,StartMinPriorLow,EndMinPriorLow,PctAvailable,SourceFile,Vintage
+Copalis,Daylight (good weather),>3:00 (lead-in),,,0.0267,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),3:00 - 2:45,180,165,0.0882,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),2:45 - 2:30,165,150,0.1551,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),2:30 - 2:15,150,135,0.246,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),2:15 - 2:00,135,120,0.3369,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),2:00 - 1:45,120,105,0.3583,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),1:45 - 1:30,105,90,0.4465,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),1:30 - 1:15,90,75,0.5241,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),1:15 - 1:00,75,60,0.5455,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),1:00 - 0:45,60,45,0.5214,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),0:45 - 0:30,45,30,0.4679,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),0:30 - 0:15,30,15,0.3342,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),0:15 - 0:00,15,0,0.2647,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),0:00 - 0:15,0,-15,0.2086,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),0:15 - 0:30,-15,-30,0.1658,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),0:30 - 0:45,-30,-45,0.1096,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),0:45 - 1:00,-45,-60,0.0535,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),1:00 - 1:15,-60,-75,0.016,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Daylight (good weather),1:15 - 1:30,-75,-90,0.015,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Evening (near dark),3:30 - 3:15,210,195,0.0407,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),3:15 - 3:00,195,180,0.1001,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),3:00 - 2:45,180,165,0.1478,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),2:45 - 2:30,165,150,0.2305,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),2:30 - 2:15,150,135,0.3248,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),2:15 - 2:00,135,120,0.4121,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),2:00 - 1:45,120,105,0.4703,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),1:45 - 1:30,105,90,0.4948,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),1:30 - 1:15,90,75,0.5099,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),1:15 - 1:00,75,60,0.5204,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),1:00 - 0:45,60,45,0.4505,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),0:45 - 0:30,45,30,0.3644,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),0:30 - 0:15,30,15,0.2771,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),0:15 - 0:00,15,0,0.2061,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),0:00 - 0:15,0,-15,0.1618,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),0:15 - 0:30,-15,-30,0.1246,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),0:30 - 0:45,-30,-45,0.0955,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),0:45 - 1:00,-45,-60,0.0605,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Evening (near dark),1:00 - 1:15,-60,-75,0.0605,Copalis_Evening_Tides_Cumulative_Ingress.pdf,2012-12-19 (evening-tide ingress PDF)
+Copalis,Near dark,>3:00 (lead-in),,,0.0693,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,3:00 - 2:45,180,165,0.0866,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,2:45 - 2:30,165,150,0.1472,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,2:30 - 2:15,150,135,0.2554,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,2:15 - 2:00,135,120,0.3247,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,2:00 - 1:45,120,105,0.3506,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,1:45 - 1:30,105,90,0.3377,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,1:30 - 1:15,90,75,0.3506,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,1:15 - 1:00,75,60,0.3506,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,1:00 - 0:45,60,45,0.2944,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,0:45 - 0:30,45,30,0.2684,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,0:30 - 0:15,30,15,0.2294,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,0:15 - 0:00,15,0,0.1861,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,0:00 - 0:15,0,-15,0.1299,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,0:15 - 0:30,-15,-30,0.0736,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,0:30 - 0:45,-30,-45,0.0649,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Copalis,Near dark,0:45 - 1:00,-45,-60,0.0346,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,2:00 - 1:45,120,105,0.483,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,1:45 - 1:30,105,90,0.587,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,1:30 - 1:15,90,75,0.67,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,1:15 - 1:00,75,60,0.707,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,1:00 - 0:45,60,45,0.708,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,0:45 - 0:30,45,30,0.65,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,0:30 - 0:15,30,15,0.573,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,0:15 - 0:00,15,0,0.458,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,0:00 - 0:15,0,-15,0.367,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,0:15 - 0:30,-15,-30,0.282,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,0:30 - 0:45,-30,-45,0.197,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,0:45 - 1:00,-45,-60,0.182,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Kalaloch,Daylight,1:00 - 1:15,-60,-75,0.182,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Long Beach,Evening (near dark),3:30 - 3:15,210,195,0.178,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),3:15 - 3:00,195,180,0.2646,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),3:00 - 2:45,180,165,0.3767,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),2:45 - 2:30,165,150,0.5035,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),2:30 - 2:15,150,135,0.6113,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),2:15 - 2:00,135,120,0.6848,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),2:00 - 1:45,120,105,0.7322,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),1:45 - 1:30,105,90,0.7213,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),1:30 - 1:15,90,75,0.6674,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),1:15 - 1:00,75,60,0.558,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),1:00 - 0:45,60,45,0.4627,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),0:45 - 0:30,45,30,0.3468,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),0:30 - 0:15,30,15,0.2357,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),0:15 - 0:00,15,0,0.1742,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),0:00 - 0:15,0,-15,0.1334,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),0:15 - 0:30,-15,-30,0.1023,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),0:30 - 0:45,-30,-45,0.0691,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),0:45 - 1:00,-45,-60,0.0446,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Long Beach,Evening (near dark),1:00 - 1:15,-60,-75,0.0354,Longbeach_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-02-11 (evening-tide ingress PDF)
+Mocrocks,Daylight (good weather),>3:00 (lead-in),,,0.0552,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),3:00 - 2:45,180,165,0.0934,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),2:45 - 2:30,165,150,0.1584,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),2:30 - 2:15,150,135,0.2645,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),2:15 - 2:00,135,120,0.3932,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),2:00 - 1:45,120,105,0.5064,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),1:45 - 1:30,105,90,0.5856,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),1:30 - 1:15,90,75,0.6294,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),1:15 - 1:00,75,60,0.6096,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),1:00 - 0:45,60,45,0.5827,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),0:45 - 0:30,45,30,0.553,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),0:30 - 0:15,30,15,0.4795,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),0:15 - 0:00,15,0,0.4045,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),0:00 - 0:15,0,-15,0.3366,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),0:15 - 0:30,-15,-30,0.2801,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),0:30 - 0:45,-30,-45,0.2277,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),0:45 - 1:00,-45,-60,0.2051,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),1:00 - 1:15,-60,-75,0.1548,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),1:15 - 1:30,-75,-90,0.0953,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),1:30 - 1:45,-90,-105,0.052,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight (good weather),1:45 - 2:00,-105,-120,0.012,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,>3:00 (lead-in),,,0.0425,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,3:00 - 2:45,180,165,0.0888,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,2:45 - 2:30,165,150,0.1622,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,2:30 - 2:15,150,135,0.2625,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,2:15 - 2:00,135,120,0.3591,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,2:00 - 1:45,120,105,0.5058,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,1:45 - 1:30,105,90,0.6255,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,1:30 - 1:15,90,75,0.6988,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,1:15 - 1:00,75,60,0.7143,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,1:00 - 0:45,60,45,0.6486,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,0:45 - 0:30,45,30,0.529,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,0:30 - 0:15,30,15,0.3707,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,0:15 - 0:00,15,0,0.2819,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,0:00 - 0:15,0,-15,0.1931,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,0:15 - 0:30,-15,-30,0.139,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,0:30 - 0:45,-30,-45,0.0927,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Daylight / Poor Weather,0:45 - 1:00,-45,-60,0.0309,Master_Tables.xls,"2012-2013 (Master_Tables.xls, undated)"
+Mocrocks,Evening (near dark),3:30 - 3:15,210,195,0.0486,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),3:15 - 3:00,195,180,0.122,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),3:00 - 2:45,180,165,0.1929,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),2:45 - 2:30,165,150,0.29,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),2:30 - 2:15,150,135,0.4029,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),2:15 - 2:00,135,120,0.4908,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),2:00 - 1:45,120,105,0.5604,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),1:45 - 1:30,105,90,0.6076,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),1:30 - 1:15,90,75,0.5997,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),1:15 - 1:00,75,60,0.5525,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),1:00 - 0:45,60,45,0.4751,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),0:45 - 0:30,45,30,0.3924,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),0:30 - 0:15,30,15,0.3031,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),0:15 - 0:00,15,0,0.2375,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),0:00 - 0:15,0,-15,0.1654,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),0:15 - 0:30,-15,-30,0.1299,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),0:30 - 0:45,-30,-45,0.1089,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),0:45 - 1:00,-45,-60,0.0879,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),1:00 - 1:15,-60,-75,0.0879,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),1:15 - 1:30,-75,-90,0.0879,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),1:30 - 1:45,-90,-105,0.0879,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Mocrocks,Evening (near dark),1:45 - 2:00,-105,-120,0.0879,Mocrocks_Evening_Tides_Cumulative_Ingress_20130918.pdf,2013-09-18 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),3:30 - 3:15,210,195,0.0995,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),3:15 - 3:00,195,180,0.1131,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),3:00 - 2:45,180,165,0.1686,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),2:45 - 2:30,165,150,0.2353,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),2:30 - 2:15,150,135,0.3348,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),2:15 - 2:00,135,120,0.4333,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),2:00 - 1:45,120,105,0.5249,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),1:45 - 1:30,105,90,0.5373,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),1:30 - 1:15,90,75,0.5192,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),1:15 - 1:00,75,60,0.4808,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),1:00 - 0:45,60,45,0.4219,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),0:45 - 0:30,45,30,0.336,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),0:30 - 0:15,30,15,0.2704,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),0:15 - 0:00,15,0,0.1912,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),0:00 - 0:15,0,-15,0.1346,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),0:15 - 0:30,-15,-30,0.0962,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),0:30 - 0:45,-30,-45,0.069,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),0:45 - 1:00,-45,-60,0.0566,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),1:00 - 1:15,-60,-75,0.0566,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),1:15 - 1:30,-75,-90,0.0566,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),1:30 - 1:45,-90,-105,0.0566,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)
+Twin Harbors,Evening (near dark),1:45 - 2:00,-105,-120,0.0566,Twin_Harbors_Evening_Tides_Cumulative_Ingress_Sept_24_2013.pdf,2013-09-24 (evening-tide ingress PDF)

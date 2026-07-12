@@ -1,0 +1,164 @@
+season,beach,date,monitored,status,effort_workbook,effort_database,harvest_database,cpue_database,estimation_method,donor_beach,flag
+2022-23,Long Beach,2022-09-28,yes,open,199.38,84.02,420.0913303750105,,monitored,,
+2022-23,Twin Harbors,2022-09-28,no,open,194.83,,,,imputed,Long Beach,*
+2022-23,Copalis,2022-09-28,yes,open,200.87,200.87,1767.619127892046,,monitored,,
+2022-23,Long Beach,2022-09-29,yes,open,261.03,110.0,1649.9282007778534,,monitored,,
+2022-23,Twin Harbors,2022-09-29,yes,open,255.07,255.07,3826.087035844368,,monitored,,
+2022-23,Long Beach,2022-09-30,no,open,614.51,,,,imputed,Copalis,*
+2022-23,Twin Harbors,2022-09-30,yes,open,378,378.0,5535.0,,monitored,,
+2022-23,Copalis,2022-09-30,yes,open,619.08,608.26,8183.9117627126525,,monitored,,
+2022-23,Long Beach,2022-10-08,yes,open,5355.23,2256.67,33014.20936085509,,monitored,,
+2022-23,Twin Harbors,2022-10-08,yes,open,4762.6,4762.6,69057.7482599077,,monitored,,
+2022-23,Long Beach,2022-10-09,no,open,2564.11,,,,imputed,Twin Harbors,*
+2022-23,Twin Harbors,2022-10-09,yes,open,2280.36,2280.36,32809.27286165359,,monitored,,
+2022-23,Copalis,2022-10-09,yes,open,3429.63,3429.63,49687.84491519219,,monitored,,
+2022-23,Long Beach,2022-10-10,yes,open,1244.14,524.28,7864.144232102421,,monitored,,
+2022-23,Twin Harbors,2022-10-10,no,open,1106.46,,,,imputed,Long Beach,*
+2022-23,Long Beach,2022-10-11,yes,open,777.52,327.64,4691.2281290425935,,monitored,,
+2022-23,Twin Harbors,2022-10-11,no,open,631.67,,,,imputed,Copalis,*
+2022-23,Copalis,2022-10-11,yes,open,950.02,950.02,14071.326315789474,,monitored,,
+2022-23,Long Beach,2022-10-12,no,open,393.51,,,,imputed,Twin Harbors,*
+2022-23,Twin Harbors,2022-10-12,yes,open,349.97,349.97,4812.040233542725,,monitored,,
+2022-23,Long Beach,2022-10-13,yes,open,315.91,133.12,1996.8254875073578,,monitored,,
+2022-23,Twin Harbors,2022-10-13,no,open,280.95,,,,imputed,Long Beach,*
+2022-23,Copalis,2022-10-13,yes,open,492.8,492.8,6922.666666666665,,monitored,,
+2022-23,Long Beach,2022-10-14,no,open,515.81,,,,imputed,Twin Harbors,*
+2022-23,Twin Harbors,2022-10-14,yes,open,458.73,458.73,6880.95210752791,,monitored,,
+2022-23,Long Beach,2022-10-24,yes,open,1250.83,471.24,3804.8413362319175,,monitored,,
+2022-23,Twin Harbors,2022-10-24,yes,open,970.93,970.93,11335.03203052624,,monitored,,
+2022-23,Copalis,2022-10-24,yes,open,1276.54,1276.54,17932.356336452598,,monitored,,
+2022-23,Long Beach,2022-10-25,yes,open,397.35,247.65,1958.6728846317324,,monitored,,
+2022-23,Twin Harbors,2022-10-25,yes,open,388.18,388.18,5415.171187756679,,monitored,,
+2022-23,Long Beach,2022-10-26,yes,open,770.31,770.31,10211.38781366895,,monitored,,
+2022-23,Twin Harbors,2022-10-26,no,open,597.94,,,,imputed,Long Beach,*
+2022-23,Copalis,2022-10-26,yes,open,597.74,597.74,7341.486402551715,,monitored,,
+2022-23,Long Beach,2022-10-27,no,open,514.17,,,,imputed,Twin Harbors,*
+2022-23,Twin Harbors,2022-10-27,yes,open,502.32,502.32,4772.019893044737,,monitored,,
+2022-23,Long Beach,2022-10-28,yes,open,805.14,303.33,1978.8889413115435,,monitored,,
+2022-23,Twin Harbors,2022-10-28,no,open,825.64,,,,imputed,Copalis,*
+2022-23,Copalis,2022-10-28,yes,open,1085.51,1085.51,14229.04355223567,,monitored,,
+2022-23,Long Beach,2022-10-29,no,open,1101.28,,,,imputed,Twin Harbors,*
+2022-23,Twin Harbors,2022-10-29,yes,open,1075.89,1075.89,15817.891632285155,,monitored,,
+2022-23,Long Beach,2022-10-30,no,open,32.66,,,,imputed,Copalis,*
+2022-23,Twin Harbors,2022-10-30,no,open,25.35,,,,imputed,Copalis,*
+2022-23,Copalis,2022-10-30,yes,open,33.33,33.33,149.99999403953575,,monitored,,
+2022-23,Copalis,2023-01-21,yes,open,1999.83,1999.83,13608.566932725693,,monitored,,
+2022-23,Copalis,2023-01-23,yes,open,1930.24,1930.24,27755.449736012546,,monitored,,
+2022-23,Copalis,2023-01-25,yes,open,1089.59,1089.59,16343.892002205317,,monitored,,
+2022-23,Copalis,2023-02-03,yes,open,979.13,979.13,6237.423639781569,,monitored,,
+2022-23,Mocrocks,2023-02-04,yes,open,1703.01,1703.01,23112.267600119518,,monitored,,
+2022-23,Copalis,2023-02-05,yes,open,2424.78,2424.78,29758.694469669637,,monitored,,
+2022-23,Mocrocks,2023-02-06,yes,open,415.38,415.38,4742.307866254508,,monitored,,
+2022-23,Copalis,2023-02-07,yes,open,601.92,601.92,5868.72,,monitored,,
+2022-23,Mocrocks,2023-02-08,yes,open,323.65,323.65,3624.9243861893474,,monitored,,
+2022-23,Mocrocks,2023-02-17,yes,open,1400.0,1400.0,21000.000053263728,,monitored,,
+2022-23,Copalis,2023-02-18,yes,open,5652.27,5652.27,84103.0794182751,,monitored,,
+2022-23,Mocrocks,2023-02-19,yes,open,5569.92,5569.92,73598.10465488781,,monitored,,
+2022-23,Copalis,2023-02-20,yes,open,1436.42,1436.42,17933.51589974886,,monitored,,
+2022-23,Mocrocks,2023-02-21,yes,open,342.97,342.97,548.75283491213,,monitored,,
+2022-23,Copalis,2023-02-22,yes,open,236.27,236.27,1782.7624415787757,,monitored,,
+2022-23,Mocrocks,2023-03-03,yes,open,1332.28,1332.28,11690.72599491607,,monitored,,
+2022-23,Copalis,2023-03-04,yes,open,3456.05,3456.05,14090.034376146312,,monitored,,
+2022-23,Mocrocks,2023-03-05,yes,open,2507.97,2507.97,25884.19281435814,,monitored,,
+2022-23,Copalis,2023-03-06,yes,open,1136.75,1136.75,10711.675867469237,,monitored,,
+2022-23,Mocrocks,2023-03-07,yes,open,618.33,618.33,9274.999631444627,,monitored,,
+2022-23,Copalis,2023-03-08,yes,open,642.96,642.96,9291.851687751845,,monitored,,
+2022-23,Twin Harbors,2023-03-17,no,open,2435.44,,,,imputed,Copalis,*
+2022-23,Copalis,2023-03-17,yes,open,3587.2,3587.2,53808.0,,monitored,,
+2022-23,Twin Harbors,2023-03-18,yes,open,5889.71,5889.71,84980.05333333334,,monitored,,
+2022-23,Mocrocks,2023-03-18,yes,open,7699.84,7699.84,114437.94690265486,,monitored,,
+2022-23,Twin Harbors,2023-03-19,yes,open,3200.79,3200.79,48011.77688711285,,monitored,,
+2022-23,Copalis,2023-03-19,yes,open,4714.49,4714.49,68621.99528432867,,monitored,,
+2022-23,Twin Harbors,2023-03-20,no,open,1207.9,,,,imputed,Mocrocks,*
+2022-23,Mocrocks,2023-03-20,yes,open,1579.13,1579.13,23406.22270748121,,monitored,,
+2022-23,Twin Harbors,2023-03-21,no,open,1020.31,,,,imputed,Copalis,*
+2022-23,Copalis,2023-03-21,yes,open,1502.83,1502.83,22542.476936880925,,monitored,,
+2022-23,Twin Harbors,2023-03-22,no,open,975.79,,,,imputed,Mocrocks,*
+2022-23,Mocrocks,2023-03-22,yes,open,1275.69,1275.69,18102.696282522564,,monitored,,
+2022-23,Long Beach,2023-03-23,yes,open,418.63,227.05,3405.6887102732353,,monitored,,
+2022-23,Twin Harbors,2023-03-23,no,open,487.1,,,,imputed,Copalis,*
+2022-23,Copalis,2023-03-23,yes,open,928.33,928.33,12797.737586701694,,monitored,,
+2022-23,Long Beach,2023-03-24,no,open,1081.15,,,,imputed,Mocrocks,*
+2022-23,Twin Harbors,2023-03-24,yes,open,789.59,789.59,8219.801056218193,,monitored,,
+2022-23,Mocrocks,2023-03-24,yes,open,1297.17,1297.17,14150.918918918918,,monitored,,
+2022-23,Long Beach,2023-03-25,no,open,3799.76,,,,imputed,Twin Harbors,*
+2022-23,Twin Harbors,2023-03-25,yes,open,2775.04,2775.04,39197.50360674498,,monitored,,
+2022-23,Copalis,2023-03-25,yes,open,5288.74,5288.74,76745.55316243708,,monitored,,
+2022-23,Long Beach,2023-03-26,yes,open,3200.12,3200.12,44690.76222601939,,monitored,,
+2022-23,Twin Harbors,2023-03-26,no,open,2337.12,,,,imputed,Mocrocks,*
+2022-23,Mocrocks,2023-03-26,yes,open,3839.52,3839.52,47523.07217721813,,monitored,,
+2022-23,Long Beach,2023-04-06,no,open,1100.21,,,,imputed,Mocrocks,*
+2022-23,Twin Harbors,2023-04-06,no,open,676.67,,,,imputed,Mocrocks,*
+2022-23,Mocrocks,2023-04-06,yes,open,723.46,723.46,12603.46200075377,,monitored,,
+2022-23,Long Beach,2023-04-07,yes,open,2707.47,1342.88,17339.660327932954,,monitored,,
+2022-23,Twin Harbors,2023-04-07,yes,open,1382.54,1382.54,24440.446790017933,,monitored,,
+2022-23,Copalis,2023-04-07,yes,open,2603.43,2603.43,46057.71524058516,,monitored,,
+2022-23,Long Beach,2023-04-08,yes,open,4990.0,4990.0,61602.44133024986,,monitored,,
+2022-23,Twin Harbors,2023-04-08,no,open,3069.04,,,,imputed,Mocrocks,*
+2022-23,Mocrocks,2023-04-08,yes,open,3281.25,3281.25,54395.831171837206,,monitored,,
+2022-23,Long Beach,2023-04-09,no,open,2812.14,,,,imputed,Twin Harbors,*
+2022-23,Twin Harbors,2023-04-09,yes,open,1435.99,1435.99,8091.666345132736,,monitored,,
+2022-23,Copalis,2023-04-09,yes,open,2395.74,2395.74,19729.628845644616,,monitored,,
+2022-23,Long Beach,2023-04-10,no,open,1807.7,,,,imputed,Mocrocks,*
+2022-23,Twin Harbors,2023-04-10,yes,open,1111.8,1111.8,17566.505406321554,,monitored,,
+2022-23,Mocrocks,2023-04-10,yes,open,1188.68,1188.68,18583.01873113265,,monitored,,
+2022-23,Long Beach,2023-04-11,yes,open,1346.3,667.76,7258.207781355968,,monitored,,
+2022-23,Twin Harbors,2023-04-11,no,open,939.12,,,,imputed,Copalis,*
+2022-23,Copalis,2023-04-11,yes,open,1566.78,1566.78,26461.21793989965,,monitored,,
+2022-23,Long Beach,2023-04-12,no,open,2630.22,,,,imputed,Mocrocks,*
+2022-23,Twin Harbors,2023-04-12,no,open,1617.69,,,,imputed,Mocrocks,*
+2022-23,Mocrocks,2023-04-12,yes,open,1729.54,1729.54,28467.36008117296,,monitored,,
+2022-23,Long Beach,2023-04-19,no,open,319.94,,,,imputed,Mocrocks,*
+2022-23,Twin Harbors,2023-04-19,no,open,204.53,,,,imputed,Mocrocks,*
+2022-23,Mocrocks,2023-04-19,yes,open,254.34,254.34,3433.533422409731,,monitored,,
+2022-23,Long Beach,2023-04-20,no,open,1522.88,,,,imputed,Copalis,*
+2022-23,Twin Harbors,2023-04-20,no,open,853.66,,,,imputed,Copalis,*
+2022-23,Copalis,2023-04-20,yes,open,1204.79,1204.79,22825.215839007615,,monitored,,
+2022-23,Long Beach,2023-04-21,no,open,3528.62,,,,imputed,Mocrocks,*
+2022-23,Twin Harbors,2023-04-21,yes,open,2866.79,2866.79,45183.08226077329,,monitored,,
+2022-23,Mocrocks,2023-04-21,yes,open,2805.09,2805.09,52476.42989212022,,monitored,,
+2022-23,Long Beach,2023-04-22,yes,open,8390.46,4161.6,81600.0,,monitored,,
+2022-23,Twin Harbors,2023-04-22,yes,open,4703.33,4703.33,93725.84735375701,,monitored,,
+2022-23,Copalis,2023-04-22,yes,open,6637.89,6637.89,128900.64476339091,,monitored,,
+2022-23,Long Beach,2023-04-23,yes,open,6561.57,3254.49,53187.60406762337,,monitored,,
+2022-23,Twin Harbors,2023-04-23,yes,open,4194.78,4194.78,58365.33854136747,,monitored,,
+2022-23,Mocrocks,2023-04-23,yes,open,5216.16,5216.16,95538.01357807474,,monitored,,
+2022-23,Long Beach,2023-04-24,yes,open,2773.59,1375.68,17127.207500385943,,monitored,,
+2022-23,Twin Harbors,2023-04-24,no,open,1290.31,,,,imputed,Copalis,*
+2022-23,Copalis,2023-04-24,yes,open,1821.04,1821.04,35206.73284771982,,monitored,,
+2022-23,Long Beach,2023-04-25,no,open,1485.74,,,,imputed,Twin Harbors,*
+2022-23,Twin Harbors,2023-04-25,yes,open,949.83,949.83,18511.103707365197,,monitored,,
+2022-23,Mocrocks,2023-04-25,yes,open,703.26,752.29,15045.87109888979,,monitored,,
+2022-23,Long Beach,2023-05-04,no,open,744.93,,,,imputed,Copalis,*
+2022-23,Twin Harbors,2023-05-04,no,open,600.6,,,,imputed,Copalis,*
+2022-23,Copalis,2023-05-04,yes,open,548.41,548.41,10478.620689655174,,monitored,,
+2022-23,Long Beach,2023-05-05,yes,open,1314.31,899.66,17758.50341576176,,monitored,,
+2022-23,Twin Harbors,2023-05-05,no,open,883.09,,,,imputed,Mocrocks,*
+2022-23,Mocrocks,2023-05-05,yes,open,850.77,850.77,17015.437267543166,,monitored,,
+2022-23,Long Beach,2023-05-06,yes,open,4550.94,3115.18,62303.6634178842,,monitored,,
+2022-23,Twin Harbors,2023-05-06,no,open,3669.22,,,,imputed,Long Beach,*
+2022-23,Copalis,2023-05-06,yes,open,5174.37,5174.37,98921.74827655173,,monitored,,
+2022-23,Long Beach,2023-05-07,no,open,5793.96,,,,imputed,Twin Harbors,*
+2022-23,Twin Harbors,2023-05-07,yes,open,4671.4,4671.4,92788.14184618188,,monitored,,
+2022-23,Mocrocks,2023-05-07,yes,open,4486.29,4486.29,84627.72285755549,,monitored,,
+2022-23,Long Beach,2023-05-08,yes,open,2915.29,1995.56,39911.11040625554,,monitored,,
+2022-23,Twin Harbors,2023-05-08,yes,open,2350.46,2350.46,46803.08680904952,,monitored,,
+2022-23,Copalis,2023-05-08,yes,open,2146.23,2146.23,41814.48345444863,,monitored,,
+2022-23,Long Beach,2023-05-09,no,open,2371.33,,,,imputed,Mocrocks,*
+2022-23,Twin Harbors,2023-05-09,yes,open,1870.18,1870.18,37403.51601969387,,monitored,,
+2022-23,Mocrocks,2023-05-09,yes,open,1801.74,1801.74,33460.87025892984,,monitored,,
+2022-23,Long Beach,2023-05-10,yes,open,2954.08,2954.08,59081.63270097332,,monitored,,
+2022-23,Twin Harbors,2023-05-10,no,open,2381.74,,,,imputed,Long Beach,*
+2022-23,Copalis,2023-05-10,yes,open,2224.39,2224.39,41744.30518708508,,monitored,,
+2022-23,Long Beach,2023-05-11,no,open,1673.06,,,,imputed,Mocrocks,*
+2022-23,Twin Harbors,2023-05-11,yes,open,1730.35,1730.35,34017.19722983831,,monitored,,
+2022-23,Mocrocks,2023-05-11,yes,open,1271.19,1271.19,25423.81091381006,,monitored,,
+2022-23,Long Beach,2023-05-12,no,open,3928.98,,,,imputed,Copalis,*
+2022-23,Twin Harbors,2023-05-12,no,open,3239.99,,,,imputed,Copalis,*
+2022-23,Copalis,2023-05-12,yes,open,2958.47,2958.47,50663.79235471212,,monitored,,
+2022-23,Long Beach,2023-05-13,yes,open,5605.99,5605.99,47313.95645324562,,monitored,,
+2022-23,Twin Harbors,2023-05-13,yes,open,5008.45,5008.45,72299.34001486408,,monitored,,
+2022-23,Mocrocks,2023-05-13,yes,open,4259.43,4259.43,70223.05569679438,,monitored,,
+2022-23,Long Beach,2023-05-14,yes,open,3125.3,1433.42,14214.786822258271,,monitored,,
+2022-23,Twin Harbors,2023-05-14,no,open,3498.17,,,,imputed,Long Beach,*
+2022-23,Copalis,2023-05-14,yes,open,4606.76,4606.76,52977.77887611575,,monitored,,
