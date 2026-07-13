@@ -98,7 +98,10 @@ my_theme <- theme(line              = element_line(linewidth = 1.2),
 ```{r}
 current_date <- format(Sys.Date(), "%Y%m%d")
 folder_name  <- paste0("03_analyses/", current_date, "-harvest-figures")
-subfolders   <- c("historical", "coverage", "expansion_tables", "correction_factor",
+# palette for the schematic diagrams (Sections 18-22)
+NAVY<-"#1B4965"; BLUE<-"#4A7BA6"; RED<-"#C1666B"; AMBER<-"#E0A458"; GREEN<-"#4a8f5b"
+GREY<-"#9AA5AD"; INK<-"#20303A"
+subfolders   <- c("historical", "coverage", "expansion_tables", "correction_factor", "schematics",
                   "egress_surveys", "uncertainty", "sampling_design")
 for (sf in subfolders) dir.create(file.path(folder_name, sf), recursive = TRUE, showWarnings = FALSE)
 cat("Output folder:", folder_name, "\n")
@@ -134,13 +137,14 @@ var_decomp   <- rd("variance_decomposition.csv")
 val_days     <- rd("imputation_validation_days.csv")
 mult_pools   <- rd("imputation_multipliers.csv")
 
-# Beach factor ordered N -> S, and the palette used throughout
+# Beach factor ordered south -> north (Long Beach southernmost ... Kalaloch northernmost),
+# and the palette used throughout. NB: the order_n_to_s column increases northward.
 beach_meta   <- beach_meta %>% arrange(order_n_to_s)
 beach_order  <- beach_meta$beach
 beach_expand <- beach_meta$beach[beach_meta$has_expansion_table == "yes"]   # 4 tabled beaches
 beach_colors <- setNames(beach_meta$color_hex, beach_meta$beach)
 as_beach <- function(x) factor(x, levels = beach_order, ordered = TRUE)
-cat("Beaches (N->S):", paste(beach_order, collapse = ", "), "\n")
+cat("Beaches (S->N):", paste(beach_order, collapse = ", "), "\n")
 cat("dig_days seasons:", n_distinct(dig_days$season), "| creel events:", nrow(creel), "\n")
 ```
 
@@ -755,41 +759,226 @@ print(p_fig15); save_plot(p_fig15, "sampling_design", "fig15_donor_comanagement.
 ```
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 18: FIGURE 16 — LONG BEACH SURVEYS NEEDED TO SHRINK THE CORRECTION FACTOR
+# SECTION 18: FIGURE 16 — ONE SURVEY FIXES THE SHAPE, MANY FIX THE LEVEL
 # ═══════════════════════════════════════════════════════════════════════════════
 
-```{r fig.width=10, fig.height=6}
-# Long Beach's correction factor is the largest single term in its effort budget (Section 10.1),
-# and its table is the thinnest and oldest: a relative sd of 18.4% on 3 daylight surveys, newest
-# 2011, against ~6% at the refreshed northern beaches (Section 10.3). The between-survey sd of a
-# pooled table scales ~1/sqrt(number of surveys). A comprehensive WHOLE-BEACH survey additionally
-# retires the within-beach section-ratio error (sd 0.281, Table 13), which the historical
-# single-approach surveys cannot.
-anchor_N <- 3; anchor_sd <- 18.4                       # Long Beach daylight table, Section 10.3
-surv  <- tibble(N = seq(3, 30, 0.5), rel_sd = anchor_sd * sqrt(anchor_N / N))
-marks <- tibble(N   = c(3.5, 8, 16),
-                rel = anchor_sd * sqrt(anchor_N / c(3.5, 8, 16)),
-                lab = c("today: 3-4 partial surveys, pre-2011",
-                        "after a pilot season (~8 whole-beach)",
-                        "rebuild target (~16 surveys)"))
-
-p_fig16 <- ggplot(surv, aes(N, rel_sd)) +
-  geom_hline(yintercept = 6, linetype = "dashed", color = "#4a8f5b") +
-  annotate("text", x = 24, y = 7.1, label = "refreshed northern beaches (~6%)",
-           size = 3.3, color = "#3d7a4d") +
-  geom_line(linewidth = 1.1, color = "#1B4965") +
-  geom_point(data = marks, aes(N, rel), size = 3.2, color = "#C1666B") +
-  ggrepel::geom_text_repel(data = marks, aes(N, rel, label = lab), size = 3.3, lineheight = 0.9,
-                           nudge_y = 2.2, nudge_x = 1.3, seed = 1, segment.color = "grey65",
-                           min.segment.length = 0, box.padding = 0.5) +
-  scale_x_continuous(breaks = seq(4, 30, 4)) +
-  scale_y_continuous(labels = function(v) paste0(v, "%"), limits = c(0, 20)) +
-  labs(x = "Number of pooled whole-beach egress surveys of Long Beach",
+```{r fig.width=12, fig.height=7}
+# Why not just one fall + one spring survey? A survey does two different jobs. It ESTABLISHES the
+# relationship (section split, arrival curve, donor check), which one survey per condition largely
+# does. And it makes the correction factor PRECISE, which needs many surveys, because CF swings
+# ~30% survey-to-survey and the between-survey sd of a pooled table falls only as 1/sqrt(N).
+# Anchor: 18.4% relative sd on 3 daylight surveys (Section 10.3) implies a single-survey sd of
+# 18.4*sqrt(3) ~ 31.9%. 8 surveys halve today's pooled uncertainty to ~11%.
+sigma1 <- 18.4 * sqrt(3)
+cur    <- tibble(N = seq(1, 20, 0.25), rel = sigma1 / sqrt(N))
+p_fig16 <- ggplot(cur, aes(N, rel)) +
+  annotate("rect", xmin = 0.6, xmax = 2.4, ymin = -Inf, ymax = Inf, fill = GREEN, alpha = 0.10) +
+  annotate("rect", xmin = 6,   xmax = 10,  ymin = -Inf, ymax = Inf, fill = BLUE,  alpha = 0.08) +
+  geom_hline(yintercept = 6, linetype = "dashed", color = GREEN) +
+  geom_line(linewidth = 1.2, color = NAVY) +
+  geom_point(data = tibble(N = c(1, 3, 8), rel = sigma1 / sqrt(c(1, 3, 8))),
+             aes(N, rel), size = 3.4, color = RED) +
+  annotate("text", x = 3.3, y = 30,   hjust = 0, size = 4.4, fontface = "bold", color = "#3d7a4d",
+           label = "1-2 surveys establish the RELATIONSHIP") +
+  annotate("text", x = 3.3, y = 27.4, hjust = 0, size = 3.9, color = "grey25",
+           label = "section split, arrival curve, donor check.\n1 fall + 1 spring buys this: the essential first step.") +
+  annotate("text", x = 3.35, y = 19.4, hjust = 0, size = 3.7, color = INK,
+           label = "today's Long Beach daylight table (N=3)") +
+  annotate("text", x = 8.5, y = 16.2, hjust = 0, size = 4.4, fontface = "bold", color = NAVY,
+           label = "~8 surveys rebuild PRECISION") +
+  annotate("text", x = 8.5, y = 13.9, hjust = 0, size = 3.9, color = "grey25",
+           label = "halves the correction-factor uncertainty (~11%)") +
+  annotate("text", x = 10.2, y = 4.6, hjust = 0, size = 3.9, color = "#3d7a4d",
+           label = "northern beaches after resurvey (~6%)") +
+  scale_x_continuous(breaks = c(1, 2, 3, 4, 8, 12, 16, 20)) +
+  scale_y_continuous(labels = function(v) paste0(v, "%"), limits = c(0, 34)) +
+  labs(x = "Number of whole-beach egress surveys pooled (one tide condition)",
        y = "Long Beach correction-factor relative sd",
-       title = "How many surveys the Long Beach expansion table needs",
-       subtitle = "Between-survey sd scales as one over the root of survey count;\nwhole-beach coverage also retires the section-ratio error") +
-  my_theme
-print(p_fig16); save_plot(p_fig16, "sampling_design", "fig16_lb_survey_target.png", w = 10, h = 6)
+       title = "One survey fixes the shape; many surveys fix the level",
+       subtitle = "The correction factor swings about 30% from one survey to the next, so table precision improves only as 1 / sqrt(N)") +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold", size = 15.5),
+        plot.subtitle = element_text(size = 10.5, color = "grey30", margin = margin(b = 6)),
+        plot.margin = margin(10, 14, 10, 10))
+print(p_fig16); save_plot(p_fig16, "sampling_design", "fig16_lb_survey_target.png", w = 12, h = 7)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 19: FIGURE 17 — THE HARVEST-ESTIMATION FLOW, AND WHERE ERROR ENTERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=13, fig.height=7.2}
+# Schematic of the estimation chain (Section 4) with the error each step adds (Section 10).
+box <- function(x, y, w, h, fill, label, txt = "white", size = 4.4) {
+  list(r = tibble(xmin = x-w/2, xmax = x+w/2, ymin = y-h/2, ymax = y+h/2, fill = fill),
+       t = tibble(x = x, y = y, label = label, col = txt, size = size))
+}
+g1b <- list(
+  box(2.0, 7.6, 3.2, 1.15, NAVY, "BEACH COUNT\nE_t  (diggers present)"),
+  box(6.2, 7.6, 3.4, 1.15, NAVY, "DAILY EFFORT\nE_total = E_t (1-p) / CF"),
+  box(10.4,7.6, 3.2, 1.15, NAVY, "DAILY HARVEST\n= E_total x CPUE"),
+  box(2.0, 3.9, 3.2, 1.15, BLUE, "BORROWED EFFORT\nX_t = X_r (D_t / D_r)"),
+  box(6.2, 3.9, 3.4, 1.15, BLUE, "BORROWED CPUE\nfrom donor beach"),
+  box(10.4,3.9, 3.2, 1.15, BLUE, "DAILY HARVEST\n(imputed)"),
+  box(6.0, 1.15,7.2, 1.0,  INK,  "SEASON TOTAL  =  sum over all beach-days and beaches", "white", 4.3))
+g1_r <- bind_rows(lapply(g1b, `[[`, "r")); g1_t <- bind_rows(lapply(g1b, `[[`, "t"))
+g1_err <- tribble(~x, ~y, ~w, ~label, ~fill,
+  2.0, 6.55, 3.2, "observer error\n(never measured)", GREY,
+  6.2, 6.55, 3.4, "CORRECTION FACTOR\nlargest term; systematic,\ndoes not average down", RED,
+  10.4,6.55, 3.2, "interview / CPUE\nsampling error", AMBER,
+  2.0, 2.85, 3.2, "imputation error\n(big per day, averages\ndown in a tide series)", GREEN,
+  6.2, 2.85, 3.4, "CPUE-transfer error\ndominates HARVEST at\nLong Beach & Twin Harbors", RED)
+arrs <- tribble(~x, ~xe, ~y, ~ye,
+  3.7,4.4,7.6,7.6,  7.95,8.6,7.6,7.6,  3.7,4.4,3.9,3.9,  7.95,8.6,3.9,3.9,
+  10.4,8.7,7.0,1.72, 10.4,8.2,3.3,1.72)
+lane <- tribble(~x, ~y, ~label, ~col, 0.15,8.55,"COUNTED beach-day",NAVY,
+  0.15,4.85,"UNCOUNTED beach-day (imputed)",BLUE)
+p_fig17 <- ggplot() +
+  geom_rect(data=g1_err, aes(xmin=x-w/2,xmax=x+w/2,ymin=y-0.62,ymax=y+0.62,fill=fill),alpha=0.16) +
+  geom_rect(data=g1_err, aes(xmin=x-w/2,xmax=x-w/2+0.09,ymin=y-0.62,ymax=y+0.62,fill=fill)) +
+  geom_text(data=g1_err, aes(x=x-w/2+0.2,y=y,label=label,color=fill),hjust=0,size=3.15,lineheight=0.92,fontface="bold") +
+  geom_rect(data=g1_r, aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill=g1_r$fill,color=NA) +
+  geom_text(data=g1_t, aes(x=x,y=y,label=label),color=g1_t$col,size=g1_t$size,lineheight=0.95,fontface="bold") +
+  geom_segment(data=arrs, aes(x=x,xend=xe,y=y,yend=ye),arrow=arrow(length=unit(0.18,"cm"),type="closed"),linewidth=0.7,color=INK) +
+  geom_text(data=lane, aes(x=x,y=y,label=label),hjust=0,size=3.7,fontface="bold",color=lane$col) +
+  annotate("text",x=4.05,y=7.9,label="/ CF",size=3.1,fontface="italic",color=INK) +
+  annotate("text",x=4.05,y=4.2,label="borrow",size=3.0,fontface="italic",color=INK) +
+  scale_fill_identity() + scale_color_identity() +
+  coord_cartesian(xlim=c(0,12.3),ylim=c(0.3,9.0)) +
+  labs(title="How a razor-clam harvest estimate is built, and where the error enters",
+       subtitle="Each open beach-day is either counted and expanded (top) or borrowed from a counted beach (bottom); the coloured bars are the error each step adds") +
+  theme_void() +
+  theme(plot.title=element_text(face="bold",size=15.5),
+        plot.subtitle=element_text(size=10.5,color="grey30",margin=margin(b=6)),plot.margin=margin(10,14,10,10))
+print(p_fig17); save_plot(p_fig17, "schematics", "fig17_estimation_flow.png", w = 13, h = 7.2)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 20: FIGURE 18 — A TIDE SERIES AND HOW THE SOUTHERN BEACHES ARE FILLED IN
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=13, fig.height=6.6}
+# Real 2024-25 opening tide series (values are digger-trips, from dig_days.csv). Shows the
+# Copalis/Mocrocks interleave under co-management and the borrowing of Long Beach / Twin Harbors.
+days <- c("Fri\nOct 3","Sat\nOct 4","Sun\nOct 5","Mon\nOct 6","Tue\nOct 7")
+cell <- tribble(~beach,~by,~d,~status,~lab,
+  "Copalis",4,1,"Closed","", "Copalis",4,2,"Counted","1,690","Copalis",4,3,"Counted","2,926","Copalis",4,4,"Closed","","Copalis",4,5,"Closed","",
+  "Mocrocks",3,1,"Counted","843","Mocrocks",3,2,"Closed","","Mocrocks",3,3,"Closed","","Mocrocks",3,4,"Counted","270","Mocrocks",3,5,"Counted","177",
+  "Twin Harbors",2,1,"Counted","1,638","Twin Harbors",2,2,"Borrowed","borrow","Twin Harbors",2,3,"Counted","1,584","Twin Harbors",2,4,"Borrowed","borrow","Twin Harbors",2,5,"Counted","159",
+  "Long Beach",1,1,"Counted","1,477","Long Beach",1,2,"Partial","494*","Long Beach",1,3,"Borrowed","borrow","Long Beach",1,4,"Borrowed","borrow","Long Beach",1,5,"Partial","48*")
+stfill<-c(Counted=NAVY,Partial=AMBER,Borrowed="#EBD3D4",Closed="#EEF0F1")
+sttxt <-c(Counted="white",Partial="white",Borrowed=RED,Closed="#B5BDC3")
+cell$fill<-stfill[cell$status]; cell$tcol<-sttxt[cell$status]
+barr <- tribble(~d,~from_y,~to_y, 2,4,2, 3,4,1, 4,3,1, 4,3,2)
+p_fig18 <- ggplot() +
+  geom_rect(data=cell, aes(xmin=d-0.46,xmax=d+0.46,ymin=by-0.42,ymax=by+0.42,fill=fill),color="white",linewidth=1.4) +
+  geom_text(data=cell, aes(x=d,y=by,label=lab,color=tcol),fontface="bold",size=3.5) +
+  geom_curve(data=barr, aes(x=d-0.30,xend=d-0.05,y=from_y-0.42,yend=to_y+0.42),curvature=-0.25,
+             arrow=arrow(length=unit(0.16,"cm"),type="closed"),color=RED,linewidth=0.7) +
+  scale_fill_identity() + scale_color_identity() +
+  scale_x_continuous(breaks=1:5,labels=days,position="top") +
+  scale_y_continuous(breaks=1:4,labels=c("Long Beach","Twin Harbors","Mocrocks","Copalis"),limits=c(0.3,4.9)) +
+  annotate("text",x=0.05,y=4.75,label="NORTH / donors (counted every open day)",hjust=0,size=3.2,color=NAVY,fontface="bold") +
+  annotate("text",x=0.05,y=2.66,label="SOUTH / targets (borrow on uncounted days)",hjust=0,size=3.2,color=RED,fontface="bold") +
+  annotate("segment",x=0.4,xend=5.6,y=2.52,yend=2.52,linetype="dotted",color=GREY) +
+  labs(title="A tide series, and how Long Beach and Twin Harbors are filled in",
+       subtitle="Real 2024-25 opening series (values are digger-trips). Red arrows show a beach-day borrowed from the donor counted that day; * = only one Long Beach half walked",
+       x=NULL,y=NULL,
+       caption="Counted = full census   |   Partial = one Long Beach half   |   Borrowed = imputed from donor   |   blank = beach closed that day") +
+  theme_minimal(base_size=13) +
+  theme(panel.grid=element_blank(),axis.text.y=element_text(face="bold",size=11,color=INK),
+        axis.text.x=element_text(size=10,color=INK,lineheight=0.9),
+        plot.title=element_text(face="bold",size=15.5),plot.subtitle=element_text(size=10,color="grey30",margin=margin(b=8)),
+        plot.caption=element_text(size=9,color="grey35",hjust=0),plot.margin=margin(10,16,10,10))
+print(p_fig18); save_plot(p_fig18, "schematics", "fig18_tide_series_imputation.png", w = 13, h = 6.6)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 21: FIGURE 19 — WHY THE ESTIMATE BORROWS FROM BOTH COPALIS AND MOCROCKS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=13, fig.height=6.4}
+# The joint-donor rule (Section 4.5): X_t = X_r*(D1_t+D2_t)/(D1_r+D2_r). Summing the two donors
+# before forming the ratio averages out each beach's own noise. Left: worked arithmetic. Right:
+# empirical single-day imputation sd by donor set (imputation_pair_errors.csv).
+lab_single <- paste0("SINGLE DONOR  (Long Beach not counted today)\n\n",
+  "     LB_today  =  LB_ref  x  ( Copalis_today / Copalis_ref )\n\n",
+  "     reference day:  LB = 1,200   Copalis = 1,600\n     today:          Copalis = 2,400\n\n",
+  "     LB_today = 1,200 x (2,400 / 1,600) = 1,200 x 1.50 = 1,800")
+lab_joint <- paste0("JOINT DONOR  (both northern beaches counted)\n\n",
+  "     LB_today = LB_ref x ( Cop_today + Moc_today )/( Cop_ref + Moc_ref )\n\n",
+  "     reference: LB=1,200  Cop=1,600  Moc=1,400\n     today:     Cop=2,400  Moc=2,000\n\n",
+  "     LB_today = 1,200 x (4,400 / 3,000) = 1,200 x 1.47 = 1,760")
+left <- ggplot() +
+  geom_rect(aes(xmin=0,xmax=10,ymin=5.3,ymax=9.7),fill="#EEF3F6",color=NA) +
+  geom_rect(aes(xmin=0,xmax=0.16,ymin=5.3,ymax=9.7),fill=BLUE) +
+  geom_text(aes(x=0.35,y=7.5,label=lab_single),hjust=0,vjust=0.5,size=3.5,lineheight=1.15,color=INK) +
+  geom_rect(aes(xmin=0,xmax=10,ymin=0.3,ymax=4.7),fill="#F0EEF6",color=NA) +
+  geom_rect(aes(xmin=0,xmax=0.16,ymin=0.3,ymax=4.7),fill="#5B57A6") +
+  geom_text(aes(x=0.35,y=2.5,label=lab_joint),hjust=0,vjust=0.5,size=3.5,lineheight=1.15,color=INK) +
+  coord_cartesian(xlim=c(0,10),ylim=c(0,10)) + theme_void()
+lbpe <- readr::read_csv(file.path(data_dir,"imputation_pair_errors.csv"),show_col_types=FALSE) %>%
+  filter(target=="Long Beach") %>%
+  mutate(sdlog=as.numeric(`sd of log error`),
+         donor=recode(donor,"Copalis+Mocrocks"="Copalis + Mocrocks\n(joint)"),
+         grp=ifelse(grepl("joint",donor),"joint","single"))
+bars <- ggplot(lbpe, aes(x=reorder(donor,sdlog),y=sdlog,fill=grp)) +
+  geom_col(width=0.66) +
+  geom_text(aes(label=sprintf("%.2f",sdlog)),vjust=-0.4,size=3.6,fontface="bold",color=INK) +
+  scale_fill_manual(values=c(single=GREY,joint=GREEN),guide="none") +
+  scale_y_continuous(limits=c(0,0.75),expand=expansion(mult=c(0,0.08))) +
+  labs(x=NULL,y="sd of log error (imputed vs actual)",
+       title="Averaging two donors cuts the error",subtitle="Long Beach single-day imputation error, by donor set") +
+  theme_minimal(base_size=12) +
+  theme(panel.grid.major.x=element_blank(),panel.grid.minor=element_blank(),
+        axis.text.x=element_text(face="bold",size=9.5,color=INK,lineheight=0.9),
+        plot.title=element_text(face="bold",size=12.5),plot.subtitle=element_text(size=9.5,color="grey35"))
+p_fig19 <- (left | bars) + plot_layout(widths=c(1.35,1)) +
+  plot_annotation(title="Why the estimate borrows from BOTH Copalis and Mocrocks, not one",
+    subtitle="Summing the two donors before forming the day-over-day ratio averages out each beach's own noise, leaving the shared coastwide signal",
+    theme=theme(plot.title=element_text(face="bold",size=15.5),plot.subtitle=element_text(size=10.5,color="grey30")))
+print(p_fig19); save_plot(p_fig19, "schematics", "fig19_joint_donor.png", w = 13, h = 6.4)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 22: FIGURE 20 — LONG BEACH IS ESTIMATED THROUGH THREE STACKED ASSUMPTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=12, fig.height=7}
+# Long Beach anatomy (Section 5.4): 7 segments walked in a north-4 and a south-3 count, plus the
+# CF-from-one-end assumption and the two imputation layers.
+seg <- tibble(id=c("12600","12500","12400","12300","11200","11104","11101"),
+  name=c("Seaview","Long Beach","Cranberry","Klipsan","Ocean Park","","Oysterville"), x=1:7,
+  half=c("S","S","S","N","N","N","N"))
+seg$fill <- ifelse(seg$half=="N", BLUE, AMBER)
+p_fig20 <- ggplot() +
+  geom_rect(data=seg, aes(xmin=x-0.46,xmax=x+0.46,ymin=5.2,ymax=6.4,fill=fill),color="white",linewidth=1.1) +
+  geom_text(data=seg, aes(x=x,y=5.8,label=id),color="white",fontface="bold",size=3.5) +
+  geom_text(data=seg, aes(x=x,y=4.95,label=name),size=3.1,color=INK) +
+  annotate("segment",x=0.5,xend=7.5,y=6.7,yend=6.7,arrow=arrow(length=unit(0.15,"cm"),ends="both"),color=GREY) +
+  annotate("text",x=0.6,y=6.95,label="SOUTH (Beard's Hollow)",hjust=0,size=3,color=GREY) +
+  annotate("text",x=7.4,y=6.95,label="NORTH (Leadbetter Pt.)",hjust=1,size=3,color=GREY) +
+  annotate("segment",x=1,xend=3,y=4.5,yend=4.5,color=AMBER,linewidth=1.3) +
+  annotate("text",x=2,y=4.2,label="South 3-segment count",size=3.2,color=AMBER,fontface="bold") +
+  annotate("segment",x=4,xend=7,y=4.5,yend=4.5,color=BLUE,linewidth=1.3) +
+  annotate("text",x=5.5,y=4.2,label="North 4-segment count",size=3.2,color=BLUE,fontface="bold") +
+  geom_rect(aes(xmin=0.5,xmax=7.5,ymin=2.7,ymax=3.6),fill=RED,alpha=0.13) +
+  annotate("text",x=0.7,y=3.15,hjust=0,size=3.25,color=RED,fontface="bold",
+    label="Assumption 1.  The egress survey that sets the correction factor has only ever\ncovered ONE end (Oysterville-north or Seaview-south), yet CF is applied to the whole beach") +
+  geom_rect(aes(xmin=0.5,xmax=7.5,ymin=1.5,ymax=2.4),fill=AMBER,alpha=0.16) +
+  annotate("text",x=0.7,y=1.95,hjust=0,size=3.25,color="#9A6B1E",fontface="bold",
+    label="Assumption 2.  On days only one half is walked, the other half is imputed:\nLB = X + (a/b) x X   (a, b = the two halves on a reference day),  sd of log error 0.281") +
+  geom_rect(aes(xmin=0.5,xmax=7.5,ymin=0.3,ymax=1.2),fill=BLUE,alpha=0.13) +
+  annotate("text",x=0.7,y=0.75,hjust=0,size=3.25,color=NAVY,fontface="bold",
+    label="Assumption 3.  On fully uncounted days the WHOLE beach is borrowed from Copalis/Mocrocks:\nX_t = X_r x (D_t / D_r) for effort,  CPUE borrowed too,  sd of log error 0.541") +
+  scale_fill_identity() + coord_cartesian(xlim=c(0.3,7.7),ylim=c(0.1,7.2)) +
+  labs(title="Long Beach is estimated through three stacked assumptions",
+       subtitle="Seven catch-record segments, walked in two halves; in 2025-26 only 13.8% of its effort rests on a full beach count") +
+  theme_void() +
+  theme(plot.title=element_text(face="bold",size=15.5),
+        plot.subtitle=element_text(size=10.5,color="grey30",margin=margin(b=6)),plot.margin=margin(10,14,10,10))
+print(p_fig20); save_plot(p_fig20, "schematics", "fig20_longbeach_anatomy.png", w = 12, h = 7)
 ```
 
 ```{r}
