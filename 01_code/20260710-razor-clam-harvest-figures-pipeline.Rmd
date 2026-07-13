@@ -185,29 +185,45 @@ print(p_fig2); save_plot(p_fig2, "historical", "fig02_coastwide_effort.png", w =
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ```{r fig.width=11, fig.height=4.5}
-# Vertical timeline: year on the (reversed) y-axis so clustered events never collide
-# horizontally, event text repelled to the right and connected back to its point.
-ml <- milestones %>% arrange(year) %>%
-  mutate(lab = str_wrap(paste0(year, ":  ", event), 38))
+# Horizontal timeline in the style of pharmacoecon.me/post/2021-04-18-timeline-graph:
+# colored points on a central baseline, alternating up/down stems to repelled labels.
+cat_map <- tibble(
+  year     = c(1929, 1943, 1948, 1960, 1973, 1974, 1979, 1984, 1985, 1987, 1993, 1997, 2004, 2013, 2023),
+  category = c("Limits & licensing", "Seasons & closures", "Limits & licensing",
+               "Limits & licensing", "Seasons & closures", "Limits & licensing",
+               "Limits & licensing", "Seasons & closures", "Seasons & closures",
+               "Assessment & management", "Assessment & management", "Assessment & management",
+               "Limits & licensing", "Assessment & management", "Assessment & management"))
+tl_cols <- c("Limits & licensing" = "#0070C0", "Seasons & closures" = "#E8A33D",
+             "Assessment & management" = "#00B050")
 
-p_fig3 <- ggplot(ml, aes(x = 0, y = year)) +
-  annotate("segment", x = 0, xend = 0, y = min(ml$year), yend = max(ml$year),
-           color = "black", linewidth = 1) +
-  geom_point(size = 3, color = "#2166AC") +
-  ggrepel::geom_text_repel(aes(label = lab),
-                           hjust = 0, direction = "y", nudge_x = 0.25,
-                           segment.color = "grey65", segment.size = 0.3,
-                           min.segment.length = 0, box.padding = 0.45,
-                           point.padding = 0.3, size = 3.8, seed = 42,
-                           lineheight = 0.9) +
-  scale_y_reverse(breaks = seq(1930, 2020, 10), expand = expansion(mult = 0.05)) +
-  scale_x_continuous(limits = c(-0.1, 3.2)) +
+ml <- milestones %>% arrange(year) %>% left_join(cat_map, by = "year") %>%
+  mutate(idx       = row_number(),
+         direction = ifelse(idx %% 2 == 1, 1, -1),
+         tier      = ((idx - 1) %/% 2) %% 3,                 # stagger heights within each side
+         position  = direction * (1.15 + 1.0 * tier),
+         text_pos  = position + direction * 0.35,
+         lab       = str_wrap(paste0(year, ": ", event), 26),
+         category  = factor(category, levels = names(tl_cols)))
+
+p_fig3 <- ggplot(ml, aes(x = year, color = category)) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.8) +
+  geom_segment(aes(xend = year, y = position, yend = 0), color = "grey60", linewidth = 0.3) +
+  geom_point(aes(y = 0), size = 3.4) +
+  ggrepel::geom_text_repel(aes(y = text_pos, label = lab),
+                           size = 3.1, lineheight = 0.9, seed = 42, point.size = NA,
+                           box.padding = 0.3, force = 0.4, direction = "both",
+                           min.segment.length = Inf, segment.color = NA) +
+  scale_color_manual(values = tl_cols, name = NULL) +
+  scale_x_continuous(breaks = seq(1930, 2020, 10), limits = c(1925, 2029)) +
+  scale_y_continuous(limits = c(-4.3, 4.3)) +
   labs(x = NULL, y = NULL,
        title = "Milestones in Washington razor clam management, 1929 to present") +
   my_theme +
-  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
-        panel.border = element_blank())
-print(p_fig3); save_plot(p_fig3, "historical", "fig03_management_milestones.png", w = 9, h = 11)
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        axis.line.x = element_line(color = "black"), panel.border = element_blank(),
+        legend.position = "bottom")
+print(p_fig3); save_plot(p_fig3, "historical", "fig03_management_milestones.png", w = 15, h = 8)
 ```
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -555,12 +571,23 @@ red_2223 <- red_2223 %>% left_join(old_2223, by = "beach") %>%
   mutate(r = cor / cor_old, lo = lo * r, hi = hi * r, season = "2022-23") %>%
   select(season, beach, wb, cor, lo, hi)
 
-se_final <- se %>% filter(season != "2022-23") %>% bind_rows(red_2223)
+# --- 2017-18 (validated): the in-season workbook was lost; the FINAL printout (season of record)
+#     is the only complete record, and harvest_by_beach_season carries the same per-beach values.
+#     The database retained only a partial mid-season snapshot that understates the season ~2-3x
+#     (coastwide 88k vs the true ~257k). Plot the true season from the printout and scale the
+#     partial band up by the corrected-point ratio, exactly as the 2022-23 completion is handled. ---
+snap1718 <- se %>% filter(season == "2017-18") %>% select(beach, snap = cor)   # partial DB snapshot
+red_1718 <- tibble(
+  beach = as_beach(c("Long Beach","Twin Harbors","Copalis","Mocrocks")),
+  wb    = c(94213, 55588, 43987, 63215),
+  cor   = c(94213, 55588, 43987, 63215))
+old_1718 <- se %>% filter(season == "2017-18") %>% select(beach, cor_old = cor, lo, hi)
+red_1718 <- red_1718 %>% left_join(old_1718, by = "beach") %>%
+  mutate(r = cor / cor_old, lo = lo * r, hi = hi * r, season = "2017-18") %>%
+  select(season, beach, wb, cor, lo, hi)
 
-# 2017-18 markers: printout (season of record) and the workbook mid-season snapshot
-pr1718 <- tibble(beach = as_beach(c("Long Beach","Twin Harbors","Copalis","Mocrocks")),
-                 printout = c(94213, 55588, 43987, 63215))
-snap1718 <- se %>% filter(season == "2017-18") %>% select(beach, snap = cor)
+se_final <- se %>% filter(!season %in% c("2022-23", "2017-18")) %>%
+  bind_rows(red_2223, red_1718)
 
 p_fig12 <- se_final %>%
   ggplot(aes(x = season, group = beach)) +
@@ -568,8 +595,6 @@ p_fig12 <- se_final %>%
   geom_line(aes(y = wb/1e3), color = "grey45", linetype = "dashed", linewidth = 0.7) +
   geom_line(aes(y = cor/1e3, color = beach), linewidth = 1) +
   geom_point(aes(y = cor/1e3, color = beach), size = 1.6) +
-  geom_point(data = pr1718 %>% mutate(season = "2017-18"),
-             aes(y = printout/1e3), shape = 5, size = 3, stroke = 1.2, color = "black") +
   geom_point(data = snap1718 %>% mutate(season = "2017-18"),
              aes(y = snap/1e3), shape = 4, size = 3, color = "grey50") +
   facet_wrap(~ beach, ncol = 2, scales = "free_y") +
@@ -577,8 +602,8 @@ p_fig12 <- se_final %>%
   scale_fill_manual(values = beach_colors, guide = "none") +
   labs(x = NULL, y = "Thousand digger trips",
        title = "Season effort by beach: workbook (dashed) vs corrected (solid) with 95% band",
-       subtitle = paste0("Diamond = 2017-18 FINAL printout; cross = mid-season snapshot;\n",
-                         "2022-23 re-derived on the completed workbook")) +
+       subtitle = paste0("Corrected (solid), workbook (dashed), 95% band. 2017-18 and 2022-23 shown on the\n",
+                         "completed season; grey cross = the partial 2017-18 database snapshot (workbook lost)")) +
   my_theme +
   theme(axis.text.x = element_text(size = 8, angle = 70, hjust = 1),
         strip.background = element_rect(fill = "grey92", color = "black"),
