@@ -54,15 +54,18 @@ set.seed(42)              # reproducibility for all resampling / simulation
 ```{r}
 ## Load packages (template pattern)
 load.lib <- c("tidyverse", "readr", "readxl", "janitor", "lubridate", "scales",
-              "here", "patchwork")
+              "here", "patchwork", "ggrepel")
 install.lib <- load.lib[!load.lib %in% installed.packages()]
 for (lib in install.lib) install.packages(lib, dependencies = TRUE)
 sapply(load.lib, require, character.only = TRUE)
 
 # Fallback for janitor::clean_names() so the pipeline runs even if janitor is unavailable.
+# Mirrors janitor's handling of "%" -> "percent" so column names match either way
+# (e.g. "effort 95% low" -> effort_95_percent_low under both janitor and this fallback).
 if (!exists("clean_names")) {
   clean_names <- function(df) {
     n <- tolower(names(df))
+    n <- gsub("%", " percent ", n)
     n <- gsub("[^a-z0-9]+", "_", n)
     n <- gsub("^_|_$", "", n)
     setNames(df, make.unique(n, sep = "_"))
@@ -146,29 +149,32 @@ cat("dig_days seasons:", n_distinct(dig_days$season), "| creel events:", nrow(cr
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ```{r fig.width=11, fig.height=5}
-# Historical coastwide series (harvest includes wastage from 1999; effort in digger trips).
-# 1999-2024 from the WDFW season summary; pre-1999 (1949-1998) can be appended to the CSV
-# from the WDFW historical seasonal summary to restore the full 1949-2024 range.
+# Historical coastwide series, 1949-2024 (harvest includes wastage; effort in digger trips).
+# 1949-1998 from the WDFW historical seasonal summary (coastwide TOTALS); 1999-2024 from the
+# season database. Validated on the 1999-2009 overlap (historical totals matched the database to
+# ~100%). The 1986-1994 separate spring/fall seasons are summed to the season start year.
 hh <- hist_he %>% filter(harvest_clams_incl_wastage > 0)   # drop closure years (0)
 
 # --- Figure 1: harvest (millions of clams) ---
 p_fig1 <- ggplot(hh, aes(x = start_year, y = harvest_clams_incl_wastage / 1e6)) +
   geom_col(fill = "#2c5f6f", width = 0.75) +
+  scale_x_continuous(breaks = seq(1950, 2020, 10)) +
   scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.05))) +
   labs(x = "Season start year",
        y = "Harvest (millions of clams)",
-       title = "Coastwide recreational razor clam harvest",
-       subtitle = "Clams including wastage (from 1999); zero = closure years") +
+       title = "Coastwide recreational razor clam harvest, 1949-2024",
+       subtitle = "Clams including wastage; gaps = closure years (no open season)") +
   my_theme
 print(p_fig1); save_plot(p_fig1, "historical", "fig01_coastwide_harvest.png", w = 11, h = 5)
 
 # --- Figure 2: effort (thousands of digger trips) ---
 p_fig2 <- ggplot(hh, aes(x = start_year, y = effort_digger_trips / 1e3)) +
   geom_col(fill = "#5b8a72", width = 0.75) +
+  scale_x_continuous(breaks = seq(1950, 2020, 10)) +
   scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.05))) +
   labs(x = "Season start year",
        y = "Effort (thousands of digger trips)",
-       title = "Coastwide recreational razor clam participation",
+       title = "Coastwide recreational razor clam participation, 1949-2024",
        subtitle = "Digger trips per season") +
   my_theme
 print(p_fig2); save_plot(p_fig2, "historical", "fig02_coastwide_effort.png", w = 11, h = 5)
@@ -179,27 +185,29 @@ print(p_fig2); save_plot(p_fig2, "historical", "fig02_coastwide_effort.png", w =
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ```{r fig.width=11, fig.height=4.5}
+# Vertical timeline: year on the (reversed) y-axis so clustered events never collide
+# horizontally, event text repelled to the right and connected back to its point.
 ml <- milestones %>% arrange(year) %>%
-  mutate(side = rep(c(1, -1), length.out = n()),
-         stem = side * rep(c(1, 1.55), length.out = n()),
-         lab  = str_wrap(event, 26))
+  mutate(lab = str_wrap(paste0(year, ":  ", event), 38))
 
-p_fig3 <- ggplot(ml, aes(x = year, y = 0)) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 1) +
-  geom_segment(aes(xend = year, yend = stem), color = "grey60") +
-  geom_point(size = 2.6, color = "#2166AC") +
-  geom_text(aes(y = stem, label = year, vjust = ifelse(side > 0, -0.5, 1.4)),
-            size = 3, fontface = "bold") +
-  geom_text(aes(y = stem, label = lab, vjust = ifelse(side > 0, -1.9, 1.6)),
-            size = 2.4, lineheight = 0.85) +
-  scale_x_continuous(breaks = seq(1930, 2030, 10), limits = c(1925, 2032)) +
-  scale_y_continuous(limits = c(-3.4, 3.4)) +
+p_fig3 <- ggplot(ml, aes(x = 0, y = year)) +
+  annotate("segment", x = 0, xend = 0, y = min(ml$year), yend = max(ml$year),
+           color = "black", linewidth = 1) +
+  geom_point(size = 3, color = "#2166AC") +
+  ggrepel::geom_text_repel(aes(label = lab),
+                           hjust = 0, direction = "y", nudge_x = 0.25,
+                           segment.color = "grey65", segment.size = 0.3,
+                           min.segment.length = 0, box.padding = 0.45,
+                           point.padding = 0.3, size = 3.8, seed = 42,
+                           lineheight = 0.9) +
+  scale_y_reverse(breaks = seq(1930, 2020, 10), expand = expansion(mult = 0.05)) +
+  scale_x_continuous(limits = c(-0.1, 3.2)) +
   labs(x = NULL, y = NULL,
-       title = "Milestones in Washington razor clam management, 1929–present") +
+       title = "Milestones in Washington razor clam management, 1929 to present") +
   my_theme +
-  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         panel.border = element_blank())
-print(p_fig3); save_plot(p_fig3, "historical", "fig03_management_milestones.png", w = 12, h = 5)
+print(p_fig3); save_plot(p_fig3, "historical", "fig03_management_milestones.png", w = 9, h = 11)
 ```
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -266,7 +274,10 @@ p_fig5 <- et %>% filter(beach %in% beach_expand) %>%
   annotate("rect", xmin = 90, xmax = 120, ymin = -Inf, ymax = Inf, fill = "gold", alpha = 0.12) +
   geom_line(linewidth = 1.1) +
   scale_color_manual(values = beach_colors) +
-  scale_x_reverse() +
+  # ticks on 60-minute (whole-hour) steps, with a matching hours axis on top
+  scale_x_reverse(breaks = seq(-120, 240, by = 60),
+                  sec.axis = sec_axis(~ . / 60, name = "Hours before low water",
+                                      breaks = seq(-2, 4, by = 1))) +
   labs(x = "Minutes before low water", y = "Percent of day's effort present",
        title = "The four operational expansion tables",
        subtitle = "Percent-available curve by beach; shaded = reference count window",
@@ -317,7 +328,9 @@ boot_cf_rsd <- function(df) {
     mids <- bins$min_from_low[bins$bin_ord >= s & bins$bin_ord <= e]
     rr <- reps %>% filter(bin_ord >= s & bin_ord <= e) %>%
       group_by(rep) %>% summarise(cf = mean(p, na.rm = TRUE), .groups = "drop")
-    tibble(window_mid = mean(mids), cf = mean(rr$cf), rel_sd = sd(rr$cf) / mean(rr$cf))
+    # survey_counts min_from_low is negative before low water; negate so window_mid is
+    # in "minutes before low water" (positive), matching the modal squares from cf_windows.
+    tibble(window_mid = -mean(mids), cf = mean(rr$cf), rel_sd = sd(rr$cf) / mean(rr$cf))
   })
   out
 }
@@ -328,16 +341,24 @@ fig6_df <- sc %>% filter(beach %in% beach_expand, !is.na(pct_available)) %>%
     if (is.null(res)) tibble() else res
   }) %>% ungroup()
 
-# modal windows actually used (open squares) from cf_windows
+# modal windows actually used (open squares) from cf_windows. window_start/end are already
+# in "minutes before low water", so the midpoint matches the (now sign-corrected) curve x.
+# Place each marker ON its beach's bootstrap curve by interpolating rel_sd at the window
+# midpoint, so the squares land on the lines (the curve pools conditions; a beach can have a
+# Daylight and an Evening modal window, hence up to two squares per beach).
 modal <- cf_windows %>% clean_names() %>%
+  filter(str_detect(str_to_lower(coalesce(modal_window, "")), "yes|modal|true")) %>%
   transmute(beach = as_beach(beach),
-            window_mid = (as.numeric(window_start_min_before_low) + as.numeric(window_end)) / 2,
-            rel_sd = as.numeric(relative_sd),
-            modal = str_detect(str_to_lower(coalesce(modal_window, "")), "yes|modal|true"))
+            window_mid = (as.numeric(window_start_min_before_low) + as.numeric(window_end)) / 2) %>%
+  rowwise() %>%
+  mutate(rel_sd = { cur <- fig6_df[fig6_df$beach == beach, ]
+                    if (nrow(cur) < 2) NA_real_
+                    else approx(cur$window_mid, cur$rel_sd, xout = window_mid, rule = 2)$y }) %>%
+  ungroup() %>% filter(is.finite(rel_sd))
 
 p_fig6 <- ggplot(fig6_df, aes(x = window_mid, y = rel_sd * 100, color = beach)) +
   geom_line(linewidth = 1) +
-  geom_point(data = modal %>% filter(modal), aes(x = window_mid, y = rel_sd * 100),
+  geom_point(data = modal, aes(x = window_mid, y = rel_sd * 100),
              shape = 0, size = 3, stroke = 1.2) +
   scale_color_manual(values = beach_colors) +
   scale_x_reverse() +
@@ -460,8 +481,9 @@ vd_long <- vd %>%
   group_by(beach) %>% summarise(across(everything(), ~ mean(., na.rm = TRUE)), .groups = "drop") %>%
   pivot_longer(-beach, names_to = "source", values_to = "share")
 
-p_fig10 <- ggplot(vd_long, aes(x = beach, y = share, fill = source)) +
+p_fig10 <- ggplot(vd_long, aes(x = fct_rev(beach), y = share, fill = source)) +
   geom_col(position = "stack", color = "black", linewidth = 0.3) +
+  coord_flip() +                                   # switch axes: beaches now on the vertical
   scale_fill_manual(values = c("Correction factor" = "#1B4965",
                                "Interviews" = "#5FA8D3", "Imputation" = "#E0A458")) +
   scale_y_continuous(labels = percent) +
@@ -509,12 +531,17 @@ wb_season <- beach_day %>%
   group_by(season, beach) %>%
   summarise(workbook = sum(effort_workbook, na.rm = TRUE), .groups = "drop")
 
+# Resolve column names tolerantly: janitor cleans "effort 95% low" to
+# effort_95_percent_low, while the no-janitor fallback would give effort_95_low.
+# Match on tokens so the pipeline runs correctly under either naming.
+nm  <- names(season_est)
+col <- function(...) { ps <- list(...); nm[Reduce(`&`, lapply(ps, function(p) str_detect(nm, p)))][1] }
 se <- season_est %>%
   transmute(season, beach = as_beach(beach),
-            wb   = as.numeric(effort_workbook),
-            cor  = as.numeric(effort_corrected),
-            lo   = as.numeric(effort_95_low),
-            hi   = as.numeric(effort_95_high))
+            wb   = as.numeric(.data[[col("^effort", "workbook")]]),
+            cor  = as.numeric(.data[[col("^effort", "correct")]]),
+            lo   = as.numeric(.data[[col("^effort", "95", "low")]]),
+            hi   = as.numeric(.data[[col("^effort", "95", "high")]]))
 
 # --- re-derive 2022-23 (validated): Cop/Moc fully counted -> corrected = workbook;
 #     TH via day-level median multipliers; LB via the stable season bias fraction. ---
@@ -550,7 +577,8 @@ p_fig12 <- se_final %>%
   scale_fill_manual(values = beach_colors, guide = "none") +
   labs(x = NULL, y = "Thousand digger trips",
        title = "Season effort by beach: workbook (dashed) vs corrected (solid) with 95% band",
-       subtitle = "Diamond = 2017-18 FINAL printout; cross = mid-season snapshot; 2022-23 re-derived on the completed workbook") +
+       subtitle = paste0("Diamond = 2017-18 FINAL printout; cross = mid-season snapshot;\n",
+                         "2022-23 re-derived on the completed workbook")) +
   my_theme +
   theme(axis.text.x = element_text(size = 8, angle = 70, hjust = 1),
         strip.background = element_rect(fill = "grey92", color = "black"),
