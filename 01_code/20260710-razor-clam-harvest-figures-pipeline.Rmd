@@ -706,6 +706,61 @@ p_fig14 <- ggplot(fig14, aes(x = imp_share, y = cv, color = beach)) +
 print(p_fig14); save_plot(p_fig14, "sampling_design", "fig14_season_cv_vs_imputed.png", w = 10, h = 6)
 ```
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 17: FIGURE 15 — DONOR STRUCTURE UNDER CO-MANAGEMENT (2026-27 sampling)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=10, fig.height=6}
+set.seed(42)
+# Copalis and Mocrocks are co-managed with the Quinault: the state and tribe trade days across
+# the tidal cycle. In the register the two beaches interleave (exactly one is state-counted per
+# dig day) and together they are the donor for ~63% of Long Beach / Twin Harbors imputed days.
+# Pulling state sampling back (Section 11.5) thins that donor series and forces the imputation
+# rule to reach a more distant reference day, where error grows with lag (Section 10.2). Sharing
+# the tribe's alternate-day effort/CPUE keeps both southern beaches counted every dig day, which
+# both offsets the loss and upgrades every imputed day to the best joint donor.
+dd_co <- dig_days %>% mutate(date = as.Date(date)) %>%
+  filter(season %in% c("2023-24", "2024-25", "2025-26"))
+south_state <- dd_co %>% filter(beach %in% c("Copalis", "Mocrocks"), status == "Open") %>%
+  distinct(date) %>% pull(date) %>% sort()
+imp_days <- dd_co %>% filter(beach %in% c("Long Beach", "Twin Harbors"), status == "Open",
+                             monitored %in% c("No", "Partial")) %>% distinct(date) %>% pull(date) %>% sort()
+
+# lag-error curve (Section 10.2): sd of log error by lag in days. Lag 0 = a southern donor
+# counted the same day (single beach, 0.45); the joint Copalis+Mocrocks donor that the tribal
+# data unlocks (both counted every dig day) is 0.40 (Table 15).
+lag_sd_vec   <- c(0.45, 0.493, 0.571, 0.595, 0.742, 0.742)
+lag_sd       <- function(L) lag_sd_vec[pmin(pmax(L, 0), 5) + 1]
+nearest_lag  <- function(day, pool) if (length(pool) == 0) 6L else min(abs(as.integer(pool - day)))
+sim_state_sd <- function(frac, reps = 300)
+  mean(replicate(reps, {
+    p <- south_state[runif(length(south_state)) < frac]
+    mean(vapply(imp_days, function(dy) lag_sd(nearest_lag(dy, p)), numeric(1)))
+  }))
+
+donor_grid <- tibble(rate = c(1, 0.85, 0.70, 0.55, 0.45, 0.35)) %>%
+  rowwise() %>%
+  mutate(`State counts only`            = sim_state_sd(rate),
+         `State + shared tribal counts` = 0.40) %>%
+  ungroup() %>%
+  pivot_longer(-rate, names_to = "regime", values_to = "imp_sd")
+
+p_fig15 <- ggplot(donor_grid, aes(x = rate * 100, y = imp_sd, color = regime)) +
+  annotate("rect", xmin = 40, xmax = 50, ymin = -Inf, ymax = Inf, fill = "gold", alpha = 0.15) +
+  annotate("text", x = 45, y = 0.535, label = "Section 11.5\nreallocation (45%)", size = 3, lineheight = 0.9) +
+  geom_line(linewidth = 1.1) + geom_point(size = 2.6) +
+  scale_x_reverse(breaks = seq(40, 100, 20), labels = function(v) paste0(v, "%")) +
+  scale_color_manual(values = c("State counts only" = "#C1666B",
+                                "State + shared tribal counts" = "#1B4965")) +
+  labs(x = "State sampling rate at Copalis and Mocrocks (right = pulling back)",
+       y = "Long Beach / Twin Harbors\nsingle-day imputation error (sd of log)",
+       title = "Donor cost of pulling Copalis and Mocrocks back, and the tribal offset",
+       subtitle = "Copalis and Mocrocks donate to ~63% of Long Beach / Twin Harbors imputed days",
+       color = NULL) +
+  my_theme + theme(legend.position = "bottom")
+print(p_fig15); save_plot(p_fig15, "sampling_design", "fig15_donor_comanagement.png", w = 10, h = 6)
+```
+
 ```{r}
 cat("\nPipeline complete. Figures written under:", folder_name, "\n")
 ```
