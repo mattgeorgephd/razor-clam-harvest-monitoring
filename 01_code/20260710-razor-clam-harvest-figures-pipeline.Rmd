@@ -716,9 +716,10 @@ set.seed(42)
 # the tidal cycle. In the register the two beaches interleave (exactly one is state-counted per
 # dig day) and together they are the donor for ~63% of Long Beach / Twin Harbors imputed days.
 # Pulling state sampling back (Section 11.5) thins that donor series and forces the imputation
-# rule to reach a more distant reference day, where error grows with lag (Section 10.2). Sharing
-# the tribe's alternate-day effort/CPUE keeps both southern beaches counted every dig day, which
-# both offsets the loss and upgrades every imputed day to the best joint donor.
+# rule to reach a more distant reference day, where error grows with lag (Section 10.2). The
+# Quinault dig the alternate days, but theirs is a smaller, lower-participation fishery whose
+# effort and catch rate do not proxy the state recreational fishery, so those counts cannot fill
+# the state donor series. The cost of pulling back is therefore real and unoffset.
 dd_co <- dig_days %>% mutate(date = as.Date(date)) %>%
   filter(season %in% c("2023-24", "2024-25", "2025-26"))
 south_state <- dd_co %>% filter(beach %in% c("Copalis", "Mocrocks"), status == "Open") %>%
@@ -727,8 +728,7 @@ imp_days <- dd_co %>% filter(beach %in% c("Long Beach", "Twin Harbors"), status 
                              monitored %in% c("No", "Partial")) %>% distinct(date) %>% pull(date) %>% sort()
 
 # lag-error curve (Section 10.2): sd of log error by lag in days. Lag 0 = a southern donor
-# counted the same day (single beach, 0.45); the joint Copalis+Mocrocks donor that the tribal
-# data unlocks (both counted every dig day) is 0.40 (Table 15).
+# counted the same day (single beach, 0.45), rising to 0.74 at a lag of four to five days.
 lag_sd_vec   <- c(0.45, 0.493, 0.571, 0.595, 0.742, 0.742)
 lag_sd       <- function(L) lag_sd_vec[pmin(pmax(L, 0), 5) + 1]
 nearest_lag  <- function(day, pool) if (length(pool) == 0) 6L else min(abs(as.integer(pool - day)))
@@ -739,26 +739,57 @@ sim_state_sd <- function(frac, reps = 300)
   }))
 
 donor_grid <- tibble(rate = c(1, 0.85, 0.70, 0.55, 0.45, 0.35)) %>%
-  rowwise() %>%
-  mutate(`State counts only`            = sim_state_sd(rate),
-         `State + shared tribal counts` = 0.40) %>%
-  ungroup() %>%
-  pivot_longer(-rate, names_to = "regime", values_to = "imp_sd")
+  rowwise() %>% mutate(imp_sd = sim_state_sd(rate)) %>% ungroup()
 
-p_fig15 <- ggplot(donor_grid, aes(x = rate * 100, y = imp_sd, color = regime)) +
+p_fig15 <- ggplot(donor_grid, aes(x = rate * 100, y = imp_sd)) +
   annotate("rect", xmin = 40, xmax = 50, ymin = -Inf, ymax = Inf, fill = "gold", alpha = 0.15) +
-  annotate("text", x = 45, y = 0.535, label = "Section 11.5\nreallocation (45%)", size = 3, lineheight = 0.9) +
-  geom_line(linewidth = 1.1) + geom_point(size = 2.6) +
+  annotate("text", x = 45, y = 0.455, label = "Section 11.5\nreallocation (45%)", size = 3, lineheight = 0.9) +
+  geom_line(linewidth = 1.1, color = "#C1666B") + geom_point(size = 2.6, color = "#C1666B") +
   scale_x_reverse(breaks = seq(40, 100, 20), labels = function(v) paste0(v, "%")) +
-  scale_color_manual(values = c("State counts only" = "#C1666B",
-                                "State + shared tribal counts" = "#1B4965")) +
   labs(x = "State sampling rate at Copalis and Mocrocks (right = pulling back)",
        y = "Long Beach / Twin Harbors\nsingle-day imputation error (sd of log)",
-       title = "Donor cost of pulling Copalis and Mocrocks back, and the tribal offset",
-       subtitle = "Copalis and Mocrocks donate to ~63% of Long Beach / Twin Harbors imputed days",
-       color = NULL) +
-  my_theme + theme(legend.position = "bottom")
+       title = "Pulling Copalis and Mocrocks back degrades the Long Beach donor",
+       subtitle = "Quinault alternate-day digs are lower-participation, not a state proxy") +
+  my_theme + theme(legend.position = "none")
 print(p_fig15); save_plot(p_fig15, "sampling_design", "fig15_donor_comanagement.png", w = 10, h = 6)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 18: FIGURE 16 — LONG BEACH SURVEYS NEEDED TO SHRINK THE CORRECTION FACTOR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=10, fig.height=6}
+# Long Beach's correction factor is the largest single term in its effort budget (Section 10.1),
+# and its table is the thinnest and oldest: a relative sd of 18.4% on 3 daylight surveys, newest
+# 2011, against ~6% at the refreshed northern beaches (Section 10.3). The between-survey sd of a
+# pooled table scales ~1/sqrt(number of surveys). A comprehensive WHOLE-BEACH survey additionally
+# retires the within-beach section-ratio error (sd 0.281, Table 13), which the historical
+# single-approach surveys cannot.
+anchor_N <- 3; anchor_sd <- 18.4                       # Long Beach daylight table, Section 10.3
+surv  <- tibble(N = seq(3, 30, 0.5), rel_sd = anchor_sd * sqrt(anchor_N / N))
+marks <- tibble(N   = c(3.5, 8, 16),
+                rel = anchor_sd * sqrt(anchor_N / c(3.5, 8, 16)),
+                lab = c("today: 3-4 partial surveys, pre-2011",
+                        "after a pilot season (~8 whole-beach)",
+                        "rebuild target (~16 surveys)"))
+
+p_fig16 <- ggplot(surv, aes(N, rel_sd)) +
+  geom_hline(yintercept = 6, linetype = "dashed", color = "#4a8f5b") +
+  annotate("text", x = 24, y = 7.1, label = "refreshed northern beaches (~6%)",
+           size = 3.3, color = "#3d7a4d") +
+  geom_line(linewidth = 1.1, color = "#1B4965") +
+  geom_point(data = marks, aes(N, rel), size = 3.2, color = "#C1666B") +
+  ggrepel::geom_text_repel(data = marks, aes(N, rel, label = lab), size = 3.3, lineheight = 0.9,
+                           nudge_y = 2.2, nudge_x = 1.3, seed = 1, segment.color = "grey65",
+                           min.segment.length = 0, box.padding = 0.5) +
+  scale_x_continuous(breaks = seq(4, 30, 4)) +
+  scale_y_continuous(labels = function(v) paste0(v, "%"), limits = c(0, 20)) +
+  labs(x = "Number of pooled whole-beach egress surveys of Long Beach",
+       y = "Long Beach correction-factor relative sd",
+       title = "How many surveys the Long Beach expansion table needs",
+       subtitle = "Between-survey sd scales as one over the root of survey count;\nwhole-beach coverage also retires the section-ratio error") +
+  my_theme
+print(p_fig16); save_plot(p_fig16, "sampling_design", "fig16_lb_survey_target.png", w = 10, h = 6)
 ```
 
 ```{r}
