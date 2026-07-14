@@ -895,48 +895,51 @@ print(p_fig18); save_plot(p_fig18, "schematics", "fig18_tide_series_imputation.p
 ```
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 21: FIGURE 19 — WHY THE ESTIMATE BORROWS FROM BOTH COPALIS AND MOCROCKS
+# SECTION 21: FIGURE 19 — NO JOINT DONOR: COPALIS AND MOCROCKS ARE NEVER COUNTED TOGETHER
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ```{r fig.width=13, fig.height=6.4}
-# The joint-donor rule (Section 4.5): X_t = X_r*(D1_t+D2_t)/(D1_r+D2_r). Summing the two donors
-# before forming the ratio averages out each beach's own noise. Left: worked arithmetic. Right:
-# empirical single-day imputation sd by donor set (imputation_pair_errors.csv).
-lab_single <- paste0("SINGLE DONOR  (Long Beach not counted today)\n\n",
-  "     LB_today  =  LB_ref  x  ( Copalis_today / Copalis_ref )\n\n",
-  "     reference day:  LB = 1,200   Copalis = 1,600\n     today:          Copalis = 2,400\n\n",
-  "     LB_today = 1,200 x (2,400 / 1,600) = 1,200 x 1.50 = 1,800")
-lab_joint <- paste0("JOINT DONOR  (both northern beaches counted)\n\n",
-  "     LB_today = LB_ref x ( Cop_today + Moc_today )/( Cop_ref + Moc_ref )\n\n",
-  "     reference: LB=1,200  Cop=1,600  Moc=1,400\n     today:     Cop=2,400  Moc=2,000\n\n",
-  "     LB_today = 1,200 x (4,400 / 3,000) = 1,200 x 1.47 = 1,760")
+# Co-management fixes the calendar: the state digs one of Copalis / Mocrocks while the Quinault
+# dig the other, so the two are NEVER state-counted on the same day. The joint donor of Section 4.5,
+# X_t = X_r*(D1_t+D2_t)/(D1_r+D2_r), cannot be built going forward. Long Beach must borrow from a
+# SINGLE northern donor (sd ~0.62), about 45% worse than the joint donor (0.43) would give.
+lab_reality <- paste0("UNDER CO-MANAGEMENT\n\n",
+  "The state digs one of Copalis / Mocrocks while the\n",
+  "Quinault dig the other, so the two northern beaches\n",
+  "are NEVER state-counted on the same day.\n\n",
+  "The joint donor (0.43), which would sum both before\n",
+  "forming the ratio, therefore cannot be built going\n",
+  "forward.  Long Beach must borrow from a SINGLE\n",
+  "northern donor:\n\n",
+  "     LB_today = LB_ref x ( Donor_today / Donor_ref )\n\n",
+  "single-day error ~0.62, about 45% larger than the\n",
+  "joint donor would give.")
 left <- ggplot() +
-  geom_rect(aes(xmin=0,xmax=10,ymin=5.3,ymax=9.7),fill="#EEF3F6",color=NA) +
-  geom_rect(aes(xmin=0,xmax=0.16,ymin=5.3,ymax=9.7),fill=BLUE) +
-  geom_text(aes(x=0.35,y=7.5,label=lab_single),hjust=0,vjust=0.5,size=3.5,lineheight=1.15,color=INK) +
-  geom_rect(aes(xmin=0,xmax=10,ymin=0.3,ymax=4.7),fill="#F0EEF6",color=NA) +
-  geom_rect(aes(xmin=0,xmax=0.16,ymin=0.3,ymax=4.7),fill="#5B57A6") +
-  geom_text(aes(x=0.35,y=2.5,label=lab_joint),hjust=0,vjust=0.5,size=3.5,lineheight=1.15,color=INK) +
+  geom_rect(aes(xmin=0,xmax=10,ymin=0.5,ymax=9.5),fill="#F6EEEE",color=NA) +
+  geom_rect(aes(xmin=0,xmax=0.16,ymin=0.5,ymax=9.5),fill=RED) +
+  geom_text(aes(x=0.35,y=5,label=lab_reality),hjust=0,vjust=0.5,size=3.6,lineheight=1.15,color=INK) +
   coord_cartesian(xlim=c(0,10),ylim=c(0,10)) + theme_void()
 lbpe <- readr::read_csv(file.path(data_dir,"imputation_pair_errors.csv"),show_col_types=FALSE) %>%
   filter(target=="Long Beach") %>%
-  mutate(sdlog=as.numeric(`sd of log error`),
-         donor=recode(donor,"Copalis+Mocrocks"="Copalis + Mocrocks\n(joint)"),
-         grp=ifelse(grepl("joint",donor),"joint","single"))
-bars <- ggplot(lbpe, aes(x=reorder(donor,sdlog),y=sdlog,fill=grp)) +
-  geom_col(width=0.66) +
-  geom_text(aes(label=sprintf("%.2f",sdlog)),vjust=-0.4,size=3.6,fontface="bold",color=INK) +
-  scale_fill_manual(values=c(single=GREY,joint=GREEN),guide="none") +
-  scale_y_continuous(limits=c(0,0.75),expand=expansion(mult=c(0,0.08))) +
-  labs(x=NULL,y="sd of log error (imputed vs actual)",
-       title="Averaging two donors cuts the error",subtitle="Long Beach single-day imputation error, by donor set") +
+  mutate(sdlog=as.numeric(`sd of log error`)) %>% filter(!is.na(sdlog)) %>%
+  mutate(kind=case_when(grepl("\\+",donor)~"joint",donor %in% c("Copalis","Mocrocks")~"single_n",TRUE~"other"),
+         lab=recode(donor,"Copalis+Mocrocks"="Copalis + Mocrocks\n(joint)")) %>% arrange(sdlog)
+lbpe$fillc <- ifelse(lbpe$kind=="joint","#D8D8D8",ifelse(lbpe$kind=="single_n",RED,GREY))
+bars <- ggplot(lbpe, aes(x=reorder(lab,sdlog),y=sdlog)) +
+  geom_col(width=0.66,fill=lbpe$fillc[order(lbpe$sdlog)]) +
+  geom_text(aes(label=sprintf("%.2f",sdlog)),vjust=-0.4,size=4,fontface="bold",color=INK) +
+  annotate("text",x=1,y=0.505,label="NEVER COUNTED\nTHE SAME DAY",size=3.1,color="#7A7A7A",fontface="bold",lineheight=0.9) +
+  annotate("segment",x=0.62,xend=1.38,y=0.452,yend=0.452,color="#7A7A7A",linewidth=0.8) +
+  scale_y_continuous(limits=c(0,0.72),expand=expansion(mult=c(0,0.06))) +
+  labs(x=NULL,y="single-day imputation error (sd of log)",
+       title="The best donor is off the table",subtitle="Long Beach single-day imputation error by donor set") +
   theme_minimal(base_size=12) +
   theme(panel.grid.major.x=element_blank(),panel.grid.minor=element_blank(),
-        axis.text.x=element_text(face="bold",size=9.5,color=INK,lineheight=0.9),
-        plot.title=element_text(face="bold",size=12.5),plot.subtitle=element_text(size=9.5,color="grey35"))
-p_fig19 <- (left | bars) + plot_layout(widths=c(1.35,1)) +
-  plot_annotation(title="Why the estimate borrows from BOTH Copalis and Mocrocks, not one",
-    subtitle="Summing the two donors before forming the day-over-day ratio averages out each beach's own noise, leaving the shared coastwide signal",
+        axis.text.x=element_text(face="bold",size=10,color=INK,lineheight=0.9),
+        plot.title=element_text(face="bold",size=13),plot.subtitle=element_text(size=10,color="grey35"))
+p_fig19 <- (left | bars) + plot_layout(widths=c(1.25,1)) +
+  plot_annotation(title="Copalis and Mocrocks are never counted the same day: no joint donor",
+    subtitle="The 2-on / 2-off co-management calendar rules out the best donor; Long Beach imputation is stuck with a single northern beach",
     theme=theme(plot.title=element_text(face="bold",size=15.5),plot.subtitle=element_text(size=10.5,color="grey30")))
 print(p_fig19); save_plot(p_fig19, "schematics", "fig19_joint_donor.png", w = 13, h = 6.4)
 ```
@@ -979,6 +982,68 @@ p_fig20 <- ggplot() +
   theme(plot.title=element_text(face="bold",size=15.5),
         plot.subtitle=element_text(size=10.5,color="grey30",margin=margin(b=6)),plot.margin=margin(10,14,10,10))
 print(p_fig20); save_plot(p_fig20, "schematics", "fig20_longbeach_anatomy.png", w = 12, h = 7)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 23: FIGURE 21 — BUDGET-CUT SCENARIO: LONG BEACH AT 100% IMPUTATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r fig.width=13, fig.height=6.6}
+# If a budget cut eliminates Long Beach sampling, its whole season is imputed from the northern
+# donors. The dominant uncertainty is SYSTEMATIC: the Long-Beach-to-donor season ratio swings ~31%
+# and imputation cannot see it. The day-level error (single donor ~0.62) averages down within a
+# tide series (lag-1 autocorr -0.68) and across ~15 series, so it adds little; the systematic drift
+# does not average down and no amount of donor sampling reduces it.
+se_est <- readr::read_csv(file.path(data_dir,"season_estimates.csv"),show_col_types=FALSE)
+num <- function(x) suppressWarnings(as.numeric(x))
+eff <- se_est %>% transmute(season, beach, e = num(`effort: corrected`), ecv = num(`effort CV`))
+wrat <- eff %>% filter(beach %in% c("Long Beach","Copalis","Mocrocks")) %>% select(season,beach,e) %>%
+  pivot_wider(names_from=beach, values_from=e) %>%
+  filter(!is.na(`Long Beach`) & !is.na(Copalis) & !is.na(Mocrocks)) %>%
+  mutate(ratio = `Long Beach`/(Copalis+Mocrocks))
+ratio_cv <- sd(wrat$ratio)/mean(wrat$ratio)                                   # ~0.31
+lb_now   <- eff %>% filter(beach=="Long Beach", season>="2019-20") %>% pull(ecv) %>% mean(na.rm=TRUE)
+systematic <- 0.289; idiosyncratic <- 0.046; donor <- 0.117                   # decomposition (see doc 10.x)
+total_imp  <- sqrt(systematic^2 + idiosyncratic^2 + donor^2)                  # ~0.315
+
+pA <- ggplot(wrat, aes(x=season, y=ratio, group=1)) +
+  geom_hline(yintercept=1, linetype="dotted", color=GREY) +
+  geom_hline(yintercept=mean(wrat$ratio), linetype="dashed", color=RED) +
+  geom_line(linewidth=1, color=NAVY) + geom_point(size=2.4, color=NAVY) +
+  annotate("text", x=2, y=mean(wrat$ratio)+0.08, label=sprintf("mean %.2f",mean(wrat$ratio)), color=RED, size=3.3, hjust=0) +
+  annotate("text", x=length(wrat$season)-3.5, y=1.46, label=sprintf("season-to-season CV = %.0f%%",100*ratio_cv),
+           size=3.6, fontface="bold", color=INK) +
+  scale_y_continuous(limits=c(0,1.62)) +
+  labs(x=NULL, y="Long Beach effort / (Copalis + Mocrocks)",
+       title="Long Beach does not track the northern beaches",
+       subtitle="Season effort ratio, 2007-08 to 2025-26. Imputation assumes this line is flat") +
+  theme_minimal(base_size=12) +
+  theme(panel.grid.minor=element_blank(), axis.text.x=element_text(angle=60,hjust=1,size=8),
+        plot.title=element_text(face="bold",size=13), plot.subtitle=element_text(size=9.5,color="grey35"))
+compB <- tibble(scenario=factor(c("Direct sampling\n(today)","100% imputed\n(budget cut)"),
+                                levels=c("Direct sampling\n(today)","100% imputed\n(budget cut)")),
+                val=c(lb_now, total_imp))
+pB <- ggplot(compB, aes(scenario, val)) +
+  geom_col(width=0.55, fill=c(NAVY,RED)) +
+  geom_text(aes(label=scales::percent(val,accuracy=1)), vjust=-0.5, fontface="bold", size=5, color=INK) +
+  annotate("segment", x=1.66, xend=2.34, y=systematic, yend=systematic, linetype="dashed", color=INK, linewidth=0.7) +
+  annotate("text", x=2, y=systematic-0.028, size=3.1, color=INK, lineheight=0.92,
+           label="systematic floor ~29%\ncannot be reduced by\nmore donor sampling") +
+  annotate("text", x=2, y=total_imp+0.038, label=sprintf("%.1fx today",total_imp/lb_now), size=4, color=RED, fontface="bold") +
+  scale_y_continuous(labels=scales::percent, limits=c(0,0.38), expand=expansion(mult=c(0,0.02))) +
+  labs(x=NULL, y="Long Beach season effort CV",
+       title="A budget cut roughly triples the uncertainty",
+       subtitle="Day-to-day noise averages down; the systematic ratio drift does not") +
+  theme_minimal(base_size=12) +
+  theme(panel.grid.major.x=element_blank(), panel.grid.minor=element_blank(),
+        axis.text.x=element_text(face="bold",size=10,color=INK,lineheight=0.9),
+        plot.title=element_text(face="bold",size=13), plot.subtitle=element_text(size=9.5,color="grey35"))
+p_fig21 <- (pA | pB) + plot_layout(widths=c(1,1)) +
+  plot_annotation(title="If a budget cut leaves Long Beach 100% imputed, its uncertainty roughly triples",
+    subtitle=sprintf("Season effort CV rises from ~%.0f%% (direct sampling) to ~%.0f%% (fully imputed); the dominant term is systematic and does not average down",100*lb_now,100*total_imp),
+    theme=theme(plot.title=element_text(face="bold",size=15.5),plot.subtitle=element_text(size=10.5,color="grey30")))
+print(p_fig21); save_plot(p_fig21, "schematics", "fig21_budget_cut.png", w = 13, h = 6.6)
+cat(sprintf("100%% imputation: ratio_cv=%.3f  lb_now=%.3f  total=%.3f (%.1fx)\n",ratio_cv,lb_now,total_imp,total_imp/lb_now))
 ```
 
 ```{r}
