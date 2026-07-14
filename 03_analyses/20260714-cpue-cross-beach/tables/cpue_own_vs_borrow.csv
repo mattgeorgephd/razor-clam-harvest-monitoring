@@ -1,0 +1,5 @@
+option,sd_log,kind
+"Borrow a donor's catch rate
+(cross-beach transfer)",0.16,borrow
+"Interview the target beach
+(measure it directly)",0.044,own

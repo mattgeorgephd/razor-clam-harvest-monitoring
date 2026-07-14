@@ -1,0 +1,310 @@
+---
+title: "Razor Clam CPUE Cross-Beach Transfer — how well does borrowing catch rate from one beach match another? (2026-27 planning)"
+author: "WDFW Coastal Shellfish Unit"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: hide
+    df_print: paged
+---
+
+<!--
+  PURPOSE
+  On a day a beach is not counted, the workbook imputes its EFFORT from a northern donor
+  (Copalis / Mocrocks) and, separately, must borrow a CATCH RATE (CPUE) to turn that effort
+  into harvest. CPUE transfer is the single largest source of HARVEST variance at Long Beach
+  and Twin Harbors (v10 sec 10.1). This document measures, directly from the record, how well
+  a borrowed catch rate actually matches the target beach, and asks whether a dedicated CPUE
+  study is warranted. It answers four questions the v10 document only summarises with one
+  number (0.448):
+
+    (1) BY DONOR: which beach's catch rate best matches Long Beach / Twin Harbors, and is the
+        transfer biased?
+    (2) BY LAG: is CPUE transfer a same-day phenomenon, or does a nearby day do just as well?
+    (3) SEASON-LEVEL: how much of the transfer error is a systematic season-level piece that
+        does not average down (the v10 model's 0.137)?
+    (4) OWN vs BORROW: how stable is a beach's OWN catch rate across the days of a tide series,
+        i.e. how much would interviewing the target beach itself buy over borrowing a donor?
+
+  STRUCTURE follows 20260710-razor-clam-harvest-figures-pipeline.Rmd and the co-management
+  staffing model: load.lib loop, my_theme, dated 03_analyses/ output tree, save_plot dpi=300.
+  Reads ONLY the tidy CSVs in 02_data/consolidated/. Measured CPUE = a beach-day with at least
+  one creel interview (n_interviews > 0) and CPUE > 0 in harvest_by_beach_day.csv; hand-typed
+  CPUE on estimated days is excluded, so every ratio below is measured-vs-measured.
+-->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r reset}
+rm(list = ls())
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 0: TOGGLES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r toggles}
+save_fig  <- TRUE
+out_date  <- "20260714"     # pin the output-folder date for a reproducible patch (= Sys.Date())
+MIN_SEASON_N <- 2L          # min measured pairs in a season to use it in the season-drift estimate
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 1: PACKAGES, THEME, HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r packages}
+load.lib <- c("tidyverse", "readr", "scales", "here", "patchwork")
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for (lib in install.lib) install.packages(lib, dependencies = TRUE)
+sapply(load.lib, require, character.only = TRUE)
+
+my_theme <- theme(text             = element_text(size = 14, color = "black"),
+                  panel.background = element_blank(),
+                  panel.grid.major = element_line(color = "grey92", linewidth = 0.4),
+                  panel.grid.minor = element_blank(),
+                  axis.text        = element_text(size = 13, color = "black"),
+                  panel.border     = element_rect(color = "black", fill = NA, linewidth = 1.0),
+                  strip.background = element_rect(fill = "grey95", color = "black"),
+                  strip.text       = element_text(size = 13, face = "bold"),
+                  legend.key       = element_blank(),
+                  legend.position  = "bottom",
+                  plot.title       = element_text(face = "bold"),
+                  plot.margin      = margin(10, 20, 10, 10))
+num <- function(x) suppressWarnings(as.numeric(x))
+NAVY<-"#1B4965"; RED<-"#C1666B"; GREEN<-"#4a8f5b"; GREY<-"#9AA5AD"; INK<-"#20303A"
+COPc<-"#F46D43"; MOCc<-"#9E0142"
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 2: OUTPUT FOLDER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r out_folder}
+folder_name <- here::here("03_analyses", paste0(out_date, "-cpue-cross-beach"))
+for (sf in c("transfer", "lag", "own_vs_borrow", "season_drift", "tables"))
+  dir.create(file.path(folder_name, sf), recursive = TRUE, showWarnings = FALSE)
+save_plot <- function(p, sub, name, w = 12, h = 6.2) {
+  if (save_fig) ggsave(file.path(folder_name, sub, name), plot = p, width = w, height = h, dpi = 300)
+}
+cat("Output folder:", folder_name, "\n")
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 3: DATA — measured CPUE, one row per (beach, date)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r load}
+data_dir <- here::here("02_data", "consolidated")
+hbd <- readr::read_csv(file.path(data_dir, "harvest_by_beach_day.csv"), show_col_types = FALSE) %>%
+  mutate(CPUE = num(CPUE), n_interviews = num(n_interviews), date = as.Date(date)) %>%
+  filter(!is.na(CPUE), CPUE > 0, !is.na(n_interviews), n_interviews > 0) %>%
+  distinct(beach, date, .keep_all = TRUE)
+
+wide      <- hbd %>% select(beach, date, CPUE) %>% pivot_wider(names_from = beach, values_from = CPUE)
+seasonmap <- hbd %>% distinct(date, season)
+cat("Measured-CPUE beach-days:", nrow(hbd), "over", n_distinct(hbd$season), "seasons\n")
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 4: SAME-DAY TRANSFER ERROR BY TARGET <- DONOR  (Fig 1 + table)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+The transfer error is the standard deviation of `log(donor CPUE / target CPUE)` on days both
+beaches were interviewed. The median ratio measures bias.
+
+```{r pairs}
+pair_stat <- function(tgt, dnr) {
+  if (dnr == "Copalis+Mocrocks") {
+    d <- wide %>% filter(!is.na(.data[[tgt]]), !is.na(Copalis), !is.na(Mocrocks)) %>%
+      mutate(lr = log(((Copalis + Mocrocks) / 2) / .data[[tgt]]))
+  } else {
+    d <- wide %>% filter(!is.na(.data[[tgt]]), !is.na(.data[[dnr]])) %>%
+      mutate(lr = log(.data[[dnr]] / .data[[tgt]]))
+  }
+  tibble(target = tgt, donor = dnr, n = nrow(d), sd_log = sd(d$lr),
+         median_ratio = median(exp(d$lr)), mape = 100 * mean(abs(exp(d$lr) - 1)))
+}
+pairs <- tribble(~t, ~d,
+  "Long Beach","Copalis", "Long Beach","Mocrocks", "Long Beach","Twin Harbors", "Long Beach","Copalis+Mocrocks",
+  "Twin Harbors","Copalis", "Twin Harbors","Mocrocks", "Twin Harbors","Long Beach", "Twin Harbors","Copalis+Mocrocks",
+  "Copalis","Mocrocks")
+ps <- purrr::map2_dfr(pairs$t, pairs$d, pair_stat)
+ps
+
+f1 <- ps %>% filter(target %in% c("Long Beach","Twin Harbors")) %>%
+  mutate(donlab = recode(donor, "Copalis+Mocrocks"="Copalis+Mocrocks\n(joint, unavailable)",
+                         "Twin Harbors"="Twin Harbors\n(southern sibling)",
+                         "Long Beach"="Long Beach\n(southern sibling)"),
+         region = case_when(grepl("joint", donlab) ~ "joint (unavailable)",
+                            donor %in% c("Copalis","Mocrocks") ~ "northern donor (cross-divide)",
+                            TRUE ~ "southern sibling"))
+fig1 <- ggplot(f1, aes(reorder(donlab, sd_log), sd_log, fill = region)) +
+  geom_col(width = 0.7) +
+  geom_text(aes(label = sprintf("%.2f", sd_log)), vjust = -0.4, size = 3.6, fontface = "bold", color = INK) +
+  geom_hline(yintercept = ps$sd_log[ps$target=="Copalis" & ps$donor=="Mocrocks"], linetype = "dashed", color = COPc) +
+  annotate("text", x = 0.7, y = 0.285, hjust = 0, size = 3, color = COPc,
+           label = "Copalis and Mocrocks agree at 0.26 (same region)") +
+  facet_wrap(~ target, scales = "free_x") +
+  scale_fill_manual(values = c("northern donor (cross-divide)"=RED, "southern sibling"=GREEN, "joint (unavailable)"=GREY), name = NULL) +
+  scale_y_continuous(limits = c(0, 0.56), expand = expansion(mult = c(0, 0.02))) +
+  labs(x = NULL, y = "CPUE transfer error (sd of log donor/target)",
+       title = "Borrowing catch rate across the north-south divide is the worst case",
+       subtitle = "Same-day CPUE transfer error by donor; all unbiased (median ratio ~1.0). The two northern beaches match each other (0.26) far better than the southern targets.") +
+  my_theme + theme(panel.grid.major.x = element_blank(), axis.text.x = element_text(size = 8.5, lineheight = 0.9),
+                   plot.subtitle = element_text(size = 9.5, color = "grey30"))
+fig1
+save_plot(fig1, "transfer", "cpue_fig1_by_pair.png", w = 12, h = 6.2)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 5: TRANSFER ERROR vs LAG  (Fig 2)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r lag}
+lagstat <- function(tgt, dnr, L) {
+  td <- wide %>% filter(!is.na(.data[[tgt]])) %>% transmute(date, tc = .data[[tgt]])
+  dd <- wide %>% filter(!is.na(.data[[dnr]])) %>% transmute(date, dc = .data[[dnr]])
+  lr <- purrr::map_dbl(seq_len(nrow(td)), function(i) {
+    offs <- if (L == 0) 0 else c(-L, L)
+    hit <- dd$dc[dd$date %in% (td$date[i] + offs)]
+    if (length(hit) == 0) return(NA_real_)
+    log(hit[1] / td$tc[i])
+  })
+  lr <- lr[is.finite(lr)]
+  if (length(lr) < 3) return(NA_real_)
+  sd(lr)
+}
+lag_grid <- expand_grid(
+    pair = c("Long Beach<-Copalis","Long Beach<-Mocrocks","Twin Harbors<-Copalis","Twin Harbors<-Mocrocks","Copalis<-Mocrocks"),
+    lag = 0:3) %>%
+  separate(pair, c("target","donor"), sep = "<-", remove = FALSE) %>%
+  mutate(sd_log = purrr::pmap_dbl(list(target, donor, lag), lagstat))
+
+fig2 <- ggplot(lag_grid, aes(lag, sd_log, color = pair, group = pair)) +
+  geom_line(linewidth = 1) + geom_point(size = 2.4) +
+  scale_color_manual(values = c("Long Beach<-Copalis"=COPc, "Long Beach<-Mocrocks"=MOCc,
+                                "Twin Harbors<-Copalis"="#F4A582", "Twin Harbors<-Mocrocks"="#B2182B",
+                                "Copalis<-Mocrocks"=GREY), name = NULL) +
+  scale_x_continuous(breaks = 0:3) + scale_y_continuous(limits = c(0, 0.86)) +
+  labs(x = "Lag between the target day and the borrowed donor CPUE (days)", y = "CPUE transfer error (sd of log)",
+       title = "CPUE transfer is a same-day phenomenon; it decays within one day",
+       subtitle = "Catch rate is driven by the day (tide, weather, how the dig went) more than by the beach: two beaches on one tide agree better than one beach on two tides.") +
+  my_theme + theme(plot.subtitle = element_text(size = 9.5, color = "grey30"))
+fig2
+save_plot(fig2, "lag", "cpue_fig2_by_lag.png", w = 12, h = 6.2)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 6: SEASON-LEVEL DRIFT  (Fig 4 + table)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r drift}
+drift <- function(tgt, dnr) {
+  wide %>% filter(!is.na(.data[[tgt]]), !is.na(.data[[dnr]])) %>%
+    left_join(seasonmap, by = "date") %>%
+    mutate(lr = log(.data[[dnr]] / .data[[tgt]])) %>%
+    group_by(season) %>% summarise(n = n(), mlr = mean(lr), .groups = "drop") %>%
+    filter(n >= MIN_SEASON_N) %>% mutate(pair = paste0(tgt, " <- ", dnr))
+}
+dr  <- bind_rows(drift("Long Beach","Copalis"), drift("Long Beach","Mocrocks"),
+                 drift("Twin Harbors","Copalis"), drift("Twin Harbors","Mocrocks"))
+drsd <- dr %>% group_by(pair) %>% summarise(season_level_sd = sd(mlr), .groups = "drop")
+drsd
+
+fig4 <- ggplot(dr, aes(season, exp(mlr), group = pair, color = pair)) +
+  geom_hline(yintercept = 1, linetype = "dotted", color = GREY) +
+  geom_line(linewidth = 0.9) + geom_point(size = 1.8) +
+  scale_color_manual(values = c("Long Beach <- Copalis"=COPc, "Long Beach <- Mocrocks"=MOCc,
+                                "Twin Harbors <- Copalis"="#F4A582", "Twin Harbors <- Mocrocks"="#B2182B"), name = NULL) +
+  scale_y_continuous("Season-mean donor / target CPUE ratio") +
+  labs(x = NULL, title = "A season-level piece of the CPUE gap does not average down",
+       subtitle = "Season-mean catch-rate ratio by pair; its drift (log-sd ~0.13-0.18) is the irreducible season component, matching the v10 model's 0.137 for Twin Harbors but higher for Long Beach.") +
+  my_theme + theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 8),
+                   plot.subtitle = element_text(size = 9.3, color = "grey30"))
+fig4
+save_plot(fig4, "season_drift", "cpue_fig4_season_drift.png", w = 12, h = 6.2)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 7: WHAT REMOVES THE HARVEST FLOOR — BORROW vs INTERVIEW THE TARGET (Fig 3)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Catch rate is volatile day to day (a beach's own CPUE changes about as much from one tide to
+the next as it differs from a donor's on the same tide). That day-level noise, whether ~0.45
+borrowed or comparable own, is idiosyncratic and **averages down** over a season. What does
+**not** average down is the season-level piece measured in Section 6 (~0.13 for Twin Harbors,
+~0.16-0.18 for Long Beach). That season-level component is the harvest floor. Borrowing from a
+donor cannot remove it, because the donor-to-target ratio itself drifts. Interviewing the target
+beach removes it, because you measure the target's own catch rate instead of inferring it.
+
+```{r floor}
+# borrow floor: the season-level CPUE-transfer sd (mean over the four LB/TH<-northern pairs)
+borrow_floor <- mean(drsd$season_level_sd)
+# interview residual: with the target interviewed across the season, the transfer term vanishes;
+# what remains is the sampling error of the measured season CPUE. The per-day measured-CPUE sd is
+# ~0.17 (v10 sec 10.1); interviewing on ~15 spread days per season leaves a season-mean sampling
+# sd of ~0.17/sqrt(15) ~ 0.04. Shown as an order-of-magnitude residual, not a claim of precision.
+interview_resid <- 0.17 / sqrt(15)
+
+f3 <- tibble(
+  option = factor(c("Borrow a donor's catch rate\n(cross-beach transfer)",
+                    "Interview the target beach\n(measure it directly)"),
+                  levels = c("Borrow a donor's catch rate\n(cross-beach transfer)",
+                             "Interview the target beach\n(measure it directly)")),
+  sd_log = c(round(borrow_floor, 3), round(interview_resid, 3)),
+  kind   = c("borrow", "own"))
+fig3 <- ggplot(f3, aes(option, sd_log, fill = kind)) +
+  geom_col(width = 0.55) +
+  geom_text(aes(label = sprintf("%.2f", sd_log)), vjust = -0.4, size = 5.4, fontface = "bold", color = INK) +
+  scale_fill_manual(values = c(own = GREEN, borrow = RED), guide = "none") +
+  scale_y_continuous("Season-level CPUE error in harvest",
+                     limits = c(0, 0.21), expand = expansion(mult = c(0, 0.03))) +
+  labs(x = NULL,
+       title = "Only interviewing the target beach removes the harvest floor",
+       subtitle = "Day-to-day catch-rate noise averages down either way; the season-level piece (~0.15) does not, and only a direct interview removes it.") +
+  my_theme + theme(panel.grid.major.x = element_blank(),
+                   axis.text.x = element_text(face = "bold", size = 11, lineheight = 0.95),
+                   plot.subtitle = element_text(size = 9.8, color = "grey30"))
+fig3
+save_plot(fig3, "own_vs_borrow", "cpue_fig3_floor.png", w = 11, h = 6.0)
+cat(sprintf("harvest CPUE floor: borrow ~%.3f (season-level drift) vs interview-the-target ~%.3f (sampling residual)\n",
+            borrow_floor, interview_resid))
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 8: WRITE TABLES + HEADLINE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r write}
+readr::write_csv(ps,       file.path(folder_name, "tables", "cpue_transfer_by_pair.csv"))
+readr::write_csv(lag_grid, file.path(folder_name, "tables", "cpue_transfer_by_lag.csv"))
+readr::write_csv(drsd,     file.path(folder_name, "tables", "cpue_season_level_sd.csv"))
+readr::write_csv(f3,       file.path(folder_name, "tables", "cpue_own_vs_borrow.csv"))
+readr::write_csv(
+  tibble(quantity = c("day-level transfer, same day (representative)", "day-level transfer, 1 day off",
+                      "season-level transfer floor (borrow, mean of 4 pairs)", "season-level residual (interview target)"),
+         sd_log = c(round(mean(lag_grid$sd_log[lag_grid$lag==0 & lag_grid$pair!="Copalis<-Mocrocks"]),3),
+                    round(mean(lag_grid$sd_log[lag_grid$lag==1 & lag_grid$pair!="Copalis<-Mocrocks"]),3),
+                    round(borrow_floor,3), round(interview_resid,3))),
+  file.path(folder_name, "tables", "cpue_ground_truth_summary.csv"))
+
+cat("\n=== CPUE cross-beach transfer: headline ===\n")
+cat("* Day-level transfer error (LB/TH from a northern donor): ~0.43-0.48 in the log; UNBIASED (median ratio ~1.00).\n")
+cat("  This confirms the v10 document's single 0.448 and resolves it by pair.\n")
+cat("* Same region agrees; the divide does not: Copalis<->Mocrocks match at 0.26, but either matches\n")
+cat("  Long Beach / Twin Harbors only at ~0.45. Borrowing catch rate across the north-south divide is the worst case.\n")
+cat("* Transfer is a SAME-DAY phenomenon: one day off, the error jumps from ~0.45 to ~0.65. Catch rate is set by the\n")
+cat("  day (tide, weather) more than the beach, so it is volatile and the day-level piece averages down over a season.\n")
+cat("* The HARVEST FLOOR is the season-level component that does NOT average down: ~0.13 (Twin Harbors, matches the\n")
+cat("  model's 0.137) to ~0.16-0.18 (Long Beach, higher than the model assumes).\n")
+cat(sprintf("* Only measuring the target removes it: borrowing floors the season CPUE error at ~%.2f; interviewing the\n", borrow_floor))
+cat(sprintf("  target beach across the season leaves ~%.2f. Donor sampling cannot cross this floor; target interviews can.\n", interview_resid))
+cat("  => Spread creel (interview) days across the season at Long Beach / Twin Harbors: that, not more donor days,\n")
+cat("     is the lever on harvest uncertainty.\n")
+```

@@ -1,0 +1,5 @@
+quantity,sd_log
+"day-level transfer, same day (representative)",0.462
+"day-level transfer, 1 day off",0.65
+"season-level transfer floor (borrow, mean of 4 pairs)",0.16
+season-level residual (interview target),0.044

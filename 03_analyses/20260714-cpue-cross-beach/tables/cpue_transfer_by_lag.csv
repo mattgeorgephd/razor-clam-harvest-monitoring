@@ -1,0 +1,21 @@
+pair,target,donor,lag,sd_log
+Long Beach<-Copalis,Long Beach,Copalis,0,0.47600583922027073
+Long Beach<-Copalis,Long Beach,Copalis,1,0.642511975391897
+Long Beach<-Copalis,Long Beach,Copalis,2,0.6121022880328368
+Long Beach<-Copalis,Long Beach,Copalis,3,0.6880056431829208
+Long Beach<-Mocrocks,Long Beach,Mocrocks,0,0.47358704181982436
+Long Beach<-Mocrocks,Long Beach,Mocrocks,1,0.6753168121522913
+Long Beach<-Mocrocks,Long Beach,Mocrocks,2,0.7654583722287622
+Long Beach<-Mocrocks,Long Beach,Mocrocks,3,0.8162137323683754
+Twin Harbors<-Copalis,Twin Harbors,Copalis,0,0.4328280538465954
+Twin Harbors<-Copalis,Twin Harbors,Copalis,1,0.62296329613646
+Twin Harbors<-Copalis,Twin Harbors,Copalis,2,0.7155173639550207
+Twin Harbors<-Copalis,Twin Harbors,Copalis,3,0.7114924909950869
+Twin Harbors<-Mocrocks,Twin Harbors,Mocrocks,0,0.4644962677263502
+Twin Harbors<-Mocrocks,Twin Harbors,Mocrocks,1,0.6590243882578567
+Twin Harbors<-Mocrocks,Twin Harbors,Mocrocks,2,0.7007672228804823
+Twin Harbors<-Mocrocks,Twin Harbors,Mocrocks,3,0.8306662542051755
+Copalis<-Mocrocks,Copalis,Mocrocks,0,0.25586759113750696
+Copalis<-Mocrocks,Copalis,Mocrocks,1,0.6250469283414323
+Copalis<-Mocrocks,Copalis,Mocrocks,2,0.793892063973803
+Copalis<-Mocrocks,Copalis,Mocrocks,3,0.7941734539192103
