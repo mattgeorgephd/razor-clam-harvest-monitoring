@@ -1,0 +1,25 @@
+target,donor,metric,cv_target,max_imp
+Long Beach,Copalis,Effort,CV<=0.15,0.9902912621359223
+Long Beach,Copalis,Effort,CV<=0.20,0.9902912621359223
+Long Beach,Copalis,Effort,CV<=0.30,0.9902912621359223
+Long Beach,Copalis,Harvest,CV<=0.15,0.9223300970873787
+Long Beach,Copalis,Harvest,CV<=0.20,0.9902912621359223
+Long Beach,Copalis,Harvest,CV<=0.30,0.9902912621359223
+Long Beach,Mocrocks,Effort,CV<=0.15,0.9902912621359223
+Long Beach,Mocrocks,Effort,CV<=0.20,0.9902912621359223
+Long Beach,Mocrocks,Effort,CV<=0.30,0.9902912621359223
+Long Beach,Mocrocks,Harvest,CV<=0.15,0.9223300970873787
+Long Beach,Mocrocks,Harvest,CV<=0.20,0.9902912621359223
+Long Beach,Mocrocks,Harvest,CV<=0.30,0.9902912621359223
+Twin Harbors,Copalis,Effort,CV<=0.15,0.9902912621359223
+Twin Harbors,Copalis,Effort,CV<=0.20,0.9902912621359223
+Twin Harbors,Copalis,Effort,CV<=0.30,0.9902912621359223
+Twin Harbors,Copalis,Harvest,CV<=0.15,0.9223300970873787
+Twin Harbors,Copalis,Harvest,CV<=0.20,0.9902912621359223
+Twin Harbors,Copalis,Harvest,CV<=0.30,0.9902912621359223
+Twin Harbors,Mocrocks,Effort,CV<=0.15,0.9902912621359223
+Twin Harbors,Mocrocks,Effort,CV<=0.20,0.9902912621359223
+Twin Harbors,Mocrocks,Effort,CV<=0.30,0.9902912621359223
+Twin Harbors,Mocrocks,Harvest,CV<=0.15,0.9223300970873787
+Twin Harbors,Mocrocks,Harvest,CV<=0.20,0.9902912621359223
+Twin Harbors,Mocrocks,Harvest,CV<=0.30,0.9902912621359223
