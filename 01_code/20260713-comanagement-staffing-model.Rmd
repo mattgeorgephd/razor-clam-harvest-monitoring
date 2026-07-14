@@ -1,0 +1,778 @@
+---
+title: "Razor Clam Co-management Staffing Model — Imputation Error for Long Beach & Twin Harbors (2026-27 planning)"
+author: "WDFW Coastal Shellfish Unit"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: hide
+    df_print: paged
+---
+
+<!--
+  PURPOSE
+  Model how the uncertainty (coefficient of variation, CV) of the SEASON effort and
+  harvest estimates for Long Beach (LB) and Twin Harbors (TH) changes as a function of
+  how many of their open beach-days are directly counted vs imputed from a single
+  northern donor beach (Copalis OR Mocrocks — never both, because the 2-on/2-off
+  co-management calendar means the two are never state-counted on the same day, so the
+  joint donor of section 4.5 cannot be built).
+
+  This is a decision tool for the 2026-27 field-staffing plan. It expands the v10
+  methodology document's Figure 18 / Table 21 in four ways the document does not:
+    (1) it resolves the answer by DONOR (Copalis vs Mocrocks vs the unavailable joint);
+    (2) it splits the correction-factor error by light condition (daylight vs evening),
+        which is the "model daylight vs night differently" question;
+    (3) it stratifies by season part (fall / winter / spring); and
+    (4) it translates the answer into crew-days for the actual 2026-27-shaped season.
+
+  STRUCTURE follows 20260710-razor-clam-harvest-figures-pipeline.Rmd (load.lib loop,
+  my_theme, dated 03_analyses/ output tree, save_plot with dpi=300). It reads ONLY the
+  tidy CSVs in 02_data/consolidated/. set.seed and n_rep govern all Monte Carlo; keep
+  them fixed for reproducible bands.
+
+  NOTE ON EXECUTION: this document was authored without an R runtime available. Run it
+  with rmarkdown::render() in RStudio. Columns are accessed by their exact raw CSV header
+  (df[["header"]]) rather than janitor::clean_names(), so the parameter extraction does
+  not depend on which name-cleaner is active.
+-->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r reset}
+rm(list = ls())
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 0: TOGGLES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r toggles}
+save_fig        <- TRUE        # master ggsave gate (set FALSE for fast iteration)
+n_rep           <- 3000L       # Monte Carlo replicates per scenario
+n_grid          <- 16L         # number of staffing levels swept (days counted)
+set.seed(42)                   # reproducibility for ALL resampling / simulation
+planning_season <- "2025-26"   # the most recent complete season, used as the 2026-27 skeleton
+
+# --- error-model parameters that are NOT in a single consolidated CSV cell -------------
+# Sourced from 2026-Review-...-v10.docx; expose them here so assumptions are visible.
+SIG_CPUE_TRANSFER <- 0.448   # sd of log(donor CPUE / target CPUE) on paired days (v10 sec 4.5)
+SIG_CPUE_SEASON   <- 0.137   # irreducible SEASON-level component of the CPUE-transfer error (v10 sec 11.1)
+SIG_INT_DAY       <- 0.060   # per-counted-day interview (digging-fraction) log-sd on EFFORT (calibrated; least-constrained)
+SIG_CPUE_MEAS_DAY <- 0.170   # per-counted-day measured-CPUE sampling log-sd on HARVEST (calibrated)
+POOLED_IMP_1DAY   <- 0.541   # pooled single-day imputation log-sd (denominator for the season-part & aggregation shapes)
+# SCOPE: this model uses a binary counted-vs-imputed state. Long Beach's intermediate
+# "walk one half, scale the other section" option (section-ratio rule, log-sd ~0.281,
+# v10 sec 5.4) is a cheaper tier that sits between a full count (0) and a full cross-beach
+# borrow (~0.55-0.64). It is flagged as a future extension, not modelled here.
+
+# Precision targets (external standards adopted in v10 sec 11.1)
+CV_DESIGN <- 0.20   # creel-survey design target (Lester et al. 1991; McCormick & Meyer 2017)
+CV_MRIP   <- 0.30   # NOAA MRIP publication threshold (PSE <= 30)
+CV_TIGHT  <- 0.15   # a stricter internal target, shown for context
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 1: PACKAGES, THEME, HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r packages}
+load.lib <- c("tidyverse", "readr", "janitor", "scales", "here", "patchwork")
+install.lib <- load.lib[!load.lib %in% installed.packages()]
+for (lib in install.lib) install.packages(lib, dependencies = TRUE)
+sapply(load.lib, require, character.only = TRUE)
+
+## ggplot theme (from the figure pipeline)
+my_theme <- theme(text             = element_text(size = 14, color = "black"),
+                  panel.background = element_blank(),
+                  panel.grid.major = element_line(color = "grey92", linewidth = 0.4),
+                  panel.grid.minor = element_blank(),
+                  axis.text        = element_text(size = 13, color = "black"),
+                  axis.ticks       = element_line(color = "black"),
+                  panel.border     = element_rect(color = "black", fill = NA, linewidth = 1.0),
+                  strip.background = element_rect(fill = "grey95", color = "black"),
+                  strip.text       = element_text(size = 13, face = "bold"),
+                  legend.key       = element_blank(),
+                  legend.position  = "bottom",
+                  plot.title       = element_text(face = "bold"),
+                  plot.margin      = margin(10, 20, 10, 10))
+
+# small helper: numeric coercion that tolerates blank/character cells
+num <- function(x) suppressWarnings(as.numeric(x))
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 2: OUTPUT FOLDER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r out_folder}
+current_date <- format(Sys.Date(), "%Y%m%d")
+# anchor at the repo root (here::here) so outputs land in 03_analyses/ regardless of the
+# knit working directory (rmarkdown::render sets it to the .Rmd's folder, i.e. 01_code/).
+folder_name  <- here::here("03_analyses", paste0(current_date, "-comanagement-staffing"))
+subfolders   <- c("cv_curves", "cf_model", "season_part", "decision", "crew_days",
+                  "variance", "validation", "tables")
+for (sf in subfolders)
+  dir.create(file.path(folder_name, sf), recursive = TRUE, showWarnings = FALSE)
+cat("Output folder:", folder_name, "\n")
+
+save_plot <- function(p, sub, name, w = 9, h = 6) {
+  if (save_fig)
+    ggsave(file.path(folder_name, sub, name), plot = p, width = w, height = h, dpi = 300)
+}
+
+# beach palette (matches beach_metadata.csv / the figure pipeline)
+BEACH_COL <- c("Long Beach" = "#2166AC", "Twin Harbors" = "#66BD63",
+               "Copalis" = "#F46D43", "Mocrocks" = "#9E0142")
+DONOR_COL <- c("Copalis" = "#F46D43", "Mocrocks" = "#9E0142",
+               "Copalis+Mocrocks (unavailable)" = "#9AA5AD")
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 3: DATA LOADING  (consolidated tidy CSVs, raw headers preserved)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r load}
+data_dir <- here::here("02_data", "consolidated")
+rd_raw   <- function(f) readr::read_csv(file.path(data_dir, f), show_col_types = FALSE,
+                                        progress = FALSE)
+
+dig_days     <- rd_raw("dig_days.csv")
+cf_windows   <- rd_raw("cf_windows.csv")           # condition-specific CF bootstrap (daylight/evening)
+cf_uncert    <- rd_raw("cf_uncertainty.csv")       # single-table CF bootstrap (one per beach)
+pair_errors  <- rd_raw("imputation_pair_errors.csv")
+season_est   <- rd_raw("season_estimates.csv")     # for validation + the u=1 historical-ratio floor
+
+TARGETS <- c("Long Beach", "Twin Harbors")
+DONORS  <- c("Copalis", "Mocrocks")
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 4: ERROR-MODEL PARAMETERS  (extracted from the CSVs)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+The season total for a target beach is a sum over open beach-days. Each day is either
+**counted** (its effort is a direct expansion of a beach count) or **imputed** (its
+effort is borrowed from a northern donor). Four error sources enter, with very different
+correlation structure:
+
+1. **Correction factor (CF) — systematic.** Every target day, counted *and* imputed, is
+   ultimately scaled by the target beach's own correction factor (an imputed day is
+   `X_r · D_t/D_r`; the donor's CF cancels in the ratio, the target's survives in `X_r`).
+   One table therefore moves the whole season together — it does **not** average down and
+   sets a floor. Modelled as one shared draw per condition table the beach uses.
+2. **Interview (digging fraction) — independent per counted day.** Averages down.
+3. **Imputation — a tide-series block error on the imputed days.** Large per day
+   (sd of log ≈ 0.55–0.64 for a single northern donor) but negatively autocorrelated
+   within a tide series, so it averages down; the reduction is taken from the measured
+   tide-series aggregation.
+4. **CPUE transfer — imputed days only, with a shared season component.** The catch rate
+   on an imputed day must be borrowed; this error has an irreducible season-level piece
+   that does **not** average down, and it dominates *harvest* variance at LB and TH.
+
+```{r params}
+# ---- 4.1 CF relative sd, single operational table (cf_uncertainty modal rows) ----------
+# NB: filter() drops NA rows; logical [ ] subsetting would keep phantom all-NA rows.
+cf1 <- cf_uncert %>% filter(toupper(trimws(`used as the modal window`)) == "YES")
+SIG_CF_SINGLE <- setNames(num(cf1[["relative sd"]]), cf1[["beach"]])
+# e.g. Long Beach 0.056, Twin Harbors 0.051, Copalis 0.126, Mocrocks 0.095 (= v10 Table 19 floors)
+
+# ---- 4.2 CF relative sd, condition-specific tables (cf_windows modal rows) --------------
+cfc <- cf_windows %>% filter(toupper(trimws(`modal window`)) == "YES")
+SIG_CF_COND <- cfc %>%
+  transmute(beach, condition, rel_sd = num(`relative sd`))
+# e.g. LB Daylight 0.184 / Evening 0.089; TH Daylight 0.147 / Evening 0.051
+
+cf_cond_lookup <- function(beach, condition) {
+  v <- SIG_CF_COND$rel_sd[SIG_CF_COND$beach == beach & SIG_CF_COND$condition == condition]
+  if (length(v) == 0 || !is.finite(v[1])) return(unname(SIG_CF_SINGLE[beach]))
+  v[1]
+}
+
+# ---- 4.3 Single-day imputation log-sd by target<-donor (pair_errors main rows) ---------
+donor_all <- c("Copalis", "Mocrocks", "Copalis+Mocrocks", "Twin Harbors", "Long Beach")
+pe_main <- pair_errors %>%
+  filter(target %in% c(TARGETS, "Copalis", "Mocrocks"), donor %in% donor_all) %>%
+  transmute(target, donor, sd1 = num(`sd of log error`))
+sig_imp1 <- function(target, donor) {
+  v <- pe_main$sd1[pe_main$target == target & pe_main$donor == donor]
+  if (length(v) == 0 || !is.finite(v[1])) return(NA_real_)
+  v[1]
+}
+
+# ---- 4.4 Season-part multiplier on the single-day imputation sd ------------------------
+# From pair_errors "By season part": Fall 0.616, Spring 0.508, Winter 0.522 (pooled),
+# divided by the pooled single-day sd (0.541). Fall imputation is ~14% noisier than Spring.
+SEASONPART_FACTOR <- c(Fall   = 0.616 / POOLED_IMP_1DAY,
+                       Winter = 0.522 / POOLED_IMP_1DAY,
+                       Spring = 0.508 / POOLED_IMP_1DAY)
+
+# ---- 4.5 Tide-series aggregation shape g(k) -------------------------------------------
+# How the imputation log-sd of a k-day imputed BLOCK shrinks relative to a single day.
+# From pair_errors "Tide-series SUMS": k=2 -> 0.256, k=3-4 -> 0.207, k=5+ -> 0.153, over
+# the single-day 0.541. Shrinkage is faster than 1/sqrt(k) because residuals within a
+# series are negatively autocorrelated (lag-1 = -0.68, v10 sec 10.1).
+.g_knots_k <- c(1, 2, 3.5, 6)
+# k=1 anchor must be 1 (a single day vs itself, no shrinkage); ONLY the three measured
+# series-sum log-sds are normalised by the single-day sd. Putting POOLED_IMP_1DAY in the
+# numerator makes the first knot 0.541/0.541 = 1 (dividing a literal 1 would give 1.848).
+.g_knots_g <- c(POOLED_IMP_1DAY, 0.256, 0.207, 0.153) / POOLED_IMP_1DAY  # = 1, 0.473, 0.383, 0.283
+g_agg <- function(k) {
+  k <- pmax(k, 1)
+  as.numeric(approx(.g_knots_k, .g_knots_g, xout = k, rule = 2)$y)
+}
+
+# ---- 4.6 CPUE transfer split (shared season component + independent day component) -----
+SIG_CPUE_INDEP <- sqrt(max(0, SIG_CPUE_TRANSFER^2 - SIG_CPUE_SEASON^2))  # ~0.427
+
+# ---- 4.7 u = 1 floor: the historical target/donor season-effort ratio CV ---------------
+# When a beach is 100% imputed there is no counted reference day; the season is scaled off
+# the donor by the multi-year ratio, whose season-to-season drift is a systematic floor
+# that donor sampling cannot reduce (v10 sec 11.9 / Figure 21).
+eff_wide <- season_est %>%
+  transmute(season, beach, eff = num(`effort: corrected`)) %>%
+  pivot_wider(names_from = beach, values_from = eff)
+ratio_floor <- function(target, donor) {
+  if (donor == "Copalis+Mocrocks") {
+    d <- eff_wide[["Copalis"]] + eff_wide[["Mocrocks"]]
+  } else d <- eff_wide[[donor]]
+  r <- eff_wide[[target]] / d
+  sd(log(r), na.rm = TRUE)   # log-sd of the season ratio ~ its CV
+}
+
+param_tbl <- tibble(
+  target = rep(TARGETS, each = 3),
+  donor  = rep(c("Copalis", "Mocrocks", "Copalis+Mocrocks"), 2)) %>%
+  mutate(single_day_imp_sd = mapply(sig_imp1, target, donor),
+         u1_ratio_floor     = mapply(ratio_floor, target, donor),
+         cf_single          = SIG_CF_SINGLE[target])
+param_tbl
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 5: SEASON SKELETON  (real open-day structure, used as the 2026-27 template)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r skeleton}
+# One row per open beach-day for the target beaches in the planning season.
+# light condition is empty in dig_days, so we derive it from AM/PM: AM = daylight
+# (spring morning tides), PM = evening/near-dark (fall & winter). effort (workbook) is
+# the day's point-estimate effort (populated on every open day, imputed or not) and is
+# used as the day weight. CPUE is filled from the beach's measured days when missing.
+build_skeleton <- function(beach, season) {
+  d <- dig_days %>%
+    filter(beach == !!beach, season == !!season, status == "Open") %>%
+    transmute(
+      date      = as.character(date),
+      series    = `tide series`,
+      part      = `season part`,
+      ampm      = `AM/PM`,
+      condition = ifelse(`AM/PM` == "AM", "Daylight", "Evening"),
+      meanE     = num(`effort (workbook)`),
+      cpue_raw  = num(`CPUE (database)`),
+      monitored = monitored)
+  cpue_fill <- mean(d$cpue_raw, na.rm = TRUE)
+  if (!is.finite(cpue_fill)) cpue_fill <- 12
+  d %>%
+    mutate(cpue    = ifelse(is.finite(cpue_raw), cpue_raw, cpue_fill),
+           series  = factor(series, levels = unique(series)),
+           part    = factor(part, levels = c("Fall", "Winter", "Spring"))) %>%
+    filter(is.finite(meanE), meanE > 0) %>%
+    arrange(series)
+}
+
+skeletons <- setNames(lapply(TARGETS, build_skeleton, season = planning_season), TARGETS)
+
+# actual monitored share in the planning season (the current operating point)
+actual_counted_share <- sapply(skeletons, function(s)
+  mean(s$monitored == "Yes", na.rm = TRUE))
+cat("Open days in", planning_season, ":\n")
+print(sapply(skeletons, nrow))
+cat("Actual fully-counted (monitored==Yes) share:\n")
+print(round(actual_counted_share, 3))
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 6: THE MONTE CARLO ENGINE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+`sim_cv()` draws `n_rep` season totals for a target beach given which days are counted,
+the donor used on imputed days, and whether the CF error is a single operational table or
+condition-specific. It returns the CV of effort and of harvest, and can attribute variance
+to each source by toggling one source on at a time.
+
+```{r engine}
+# choose which days to count: the m largest-effort days (v10 sec 11.3, the best rule)
+choose_counted <- function(skel, m) {
+  m <- max(0L, min(nrow(skel), as.integer(round(m))))
+  ord <- order(skel$meanE, decreasing = TRUE)
+  counted <- rep(FALSE, nrow(skel)); if (m > 0) counted[ord[seq_len(m)]] <- TRUE
+  counted
+}
+
+sim_cv <- function(skel, counted, target, donor, cf_model = c("single", "condition"),
+                   n_rep = 3000L,
+                   use_cf = TRUE, use_int = TRUE, use_imp = TRUE,
+                   use_cpue_meas = TRUE, use_cpue_transfer = TRUE) {
+  cf_model <- match.arg(cf_model)
+  D <- nrow(skel); R <- n_rep
+  meanE <- skel$meanE; meanC <- skel$cpue
+  imp <- !counted                      # imputed days
+  s1  <- sig_imp1(target, donor); if (!is.finite(s1)) s1 <- POOLED_IMP_1DAY
+
+  ## --- effort log-error matrix (D x R) ---
+  logE <- matrix(0, D, R)
+
+  # (1) correction factor: SYSTEMATIC. In single-table mode ONE draw moves the whole beach
+  #     season together (one operational table; it does not average down and sets the floor).
+  #     In condition mode the daylight and evening tables are INDEPENDENT systematic draws, so
+  #     a season that mixes morning and evening tides partly averages across the two tables.
+  if (use_cf) {
+    if (cf_model == "single") {
+      sd_cf <- unname(SIG_CF_SINGLE[target]); if (!is.finite(sd_cf)) sd_cf <- 0.10
+      logE <- logE + matrix(rnorm(R, 0, sd_cf), D, R, byrow = TRUE)  # one draw, all days
+    } else {
+      for (cond in unique(skel$condition)) {
+        sd_cf <- cf_cond_lookup(target, cond)
+        if (!is.finite(sd_cf)) sd_cf <- unname(SIG_CF_SINGLE[target])
+        draw <- rnorm(R, 0, sd_cf)                    # shared across all days of this condition
+        rows <- which(skel$condition == cond)
+        logE[rows, ] <- logE[rows, ] + matrix(draw, length(rows), R, byrow = TRUE)
+      }
+    }
+  }
+
+  # (2) interview error: independent per counted day
+  if (use_int && any(counted)) {
+    cr <- which(counted)
+    logE[cr, ] <- logE[cr, ] + matrix(rnorm(length(cr) * R, 0, SIG_INT_DAY), length(cr), R)
+  }
+
+  # (3) imputation error: one shared draw per tide-series imputed BLOCK, sd = s1 * part * g(k)
+  if (use_imp && any(imp)) {
+    for (sv in levels(skel$series)) {
+      rows <- which(as.character(skel$series) == sv & imp)
+      k <- length(rows); if (k == 0) next
+      part <- as.character(skel$part[rows[1]])
+      pf <- unname(SEASONPART_FACTOR[part]); if (!is.finite(pf)) pf <- 1
+      tau <- s1 * pf * g_agg(k)
+      draw <- rnorm(R, 0, tau)                        # shared across the block (reproduces the series-sum sd)
+      logE[rows, ] <- logE[rows, ] + matrix(draw, k, R, byrow = TRUE)
+    }
+  }
+
+  Emat <- meanE * exp(logE)                           # recycles meanE down columns (D x R)
+  Ehat <- colSums(Emat)
+
+  ## --- CPUE log-error matrix for harvest ---
+  logC <- matrix(0, D, R)
+  if (use_cpue_meas && any(counted)) {
+    cr <- which(counted)
+    logC[cr, ] <- logC[cr, ] + matrix(rnorm(length(cr) * R, 0, SIG_CPUE_MEAS_DAY), length(cr), R)
+  }
+  if (use_cpue_transfer && any(imp)) {
+    ir <- which(imp)
+    theta <- rnorm(R, 0, SIG_CPUE_SEASON)             # shared season component (does NOT average down)
+    logC[ir, ] <- logC[ir, ] +
+      matrix(theta, length(ir), R, byrow = TRUE) +
+      matrix(rnorm(length(ir) * R, 0, SIG_CPUE_INDEP), length(ir), R)
+  }
+  Hmat <- Emat * (meanC * exp(logC))
+  Hhat <- colSums(Hmat)
+
+  list(cv_eff  = sd(Ehat) / mean(Ehat),
+       cv_harv = sd(Hhat) / mean(Hhat),
+       mean_eff = mean(Ehat), mean_harv = mean(Hhat))
+}
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 7: VALIDATION  (reproduce the published 2025-26 CVs and variance shares)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Before using the model to explore staffing, we check it reproduces the *published*
+2025-26 season CVs (from `season_estimates.csv`) and the variance shares (from
+`variance_decomposition.csv`) at each beach's **actual** counted share, using the
+single operational table (the current practice) and the realistic donor.
+
+```{r validation}
+set.seed(42)
+val <- lapply(TARGETS, function(b) {
+  skel <- skeletons[[b]]
+  m_actual <- round(actual_counted_share[b] * nrow(skel))
+  counted  <- choose_counted(skel, m_actual)
+  donor    <- "Copalis"   # representative single northern donor
+  full <- sim_cv(skel, counted, b, donor, "single", n_rep)
+  # variance shares (single source at a time; squared CVs normalised)
+  src <- function(...) sim_cv(skel, counted, b, donor, "single", n_rep, ...)
+  e_cf  <- src(use_cf=TRUE,  use_int=FALSE, use_imp=FALSE, use_cpue_meas=FALSE, use_cpue_transfer=FALSE)$cv_eff
+  e_int <- src(use_cf=FALSE, use_int=TRUE,  use_imp=FALSE, use_cpue_meas=FALSE, use_cpue_transfer=FALSE)$cv_eff
+  e_imp <- src(use_cf=FALSE, use_int=FALSE, use_imp=TRUE,  use_cpue_meas=FALSE, use_cpue_transfer=FALSE)$cv_eff
+  h_cf  <- src(use_cf=TRUE,  use_int=FALSE, use_imp=FALSE, use_cpue_meas=FALSE, use_cpue_transfer=FALSE)$cv_harv
+  h_int <- src(use_cf=FALSE, use_int=TRUE,  use_imp=FALSE, use_cpue_meas=TRUE,  use_cpue_transfer=FALSE)$cv_harv
+  h_imp <- src(use_cf=FALSE, use_int=FALSE, use_imp=TRUE,  use_cpue_meas=FALSE, use_cpue_transfer=FALSE)$cv_harv
+  h_cpt <- src(use_cf=FALSE, use_int=FALSE, use_imp=FALSE, use_cpue_meas=FALSE, use_cpue_transfer=TRUE )$cv_harv
+  esum <- e_cf^2 + e_int^2 + e_imp^2
+  hsum <- h_cf^2 + h_int^2 + h_imp^2 + h_cpt^2
+  pub <- season_est %>% filter(season == planning_season, beach == b)
+  tibble(beach = b,
+         counted_share = round(m_actual / nrow(skel), 2),
+         cv_eff_model = round(full$cv_eff, 3),
+         cv_eff_pub   = round(num(pub[["effort CV"]]), 3),
+         cv_harv_model = round(full$cv_harv, 3),
+         cv_harv_pub   = round(num(pub[["harvest CV"]]), 3),
+         eff_cf = round(e_cf^2/esum, 2), eff_imp = round(e_imp^2/esum, 2),
+         harv_cf = round(h_cf^2/hsum, 2), harv_imp = round(h_imp^2/hsum, 2),
+         harv_cpue_transfer = round(h_cpt^2/hsum, 2))
+}) %>% bind_rows()
+val
+```
+
+The model should land close to the published effort CVs (LB ~0.07, TH ~0.06) and harvest
+CVs (LB ~0.14, TH ~0.10), and reproduce the qualitative variance split reported in the
+published `variance_decomposition.csv` (which is cited here for comparison, not read by this
+document): 2025-26 LB effort ~49% CF / ~49% imputation; LB harvest dominated by CPUE
+transfer ~53%; TH harvest CPUE transfer ~63%. Differences reflect that
+this is an independent Monte Carlo reconstruction, not the source workbook's own bootstrap;
+treat absolute levels as approximate and the **relative** staffing comparisons as the
+product.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 8: FIGURE 1 — CV vs how much the beach is imputed, by donor
+# ═══════════════════════════════════════════════════════════════════════════════
+
+**Two distinct regimes — do not confuse them.** The swept curves below are *within-season*
+imputation: on an uncounted day the workbook borrows a **nearby counted reference day's**
+day-over-day ratio, an error that is large per day but negatively autocorrelated within a
+tide series, so it averages down (this is why counting even a few of the biggest days keeps
+effort CV low). That is a different thing from *full* imputation (`u = 1`, a budget
+elimination), where the beach is counted on **no** day, there is no reference day, and the
+whole season is scaled off the donor by the multi-year **average** ratio — whose
+season-to-season drift is a systematic floor that does not average down (v10 §11.9 /
+Figure 21). On the effort panel this `u = 1` floor is drawn as a **star**; the swept curve
+must not be read all the way to a 100% cost, because the mechanism changes there.
+
+```{r sweep}
+# sweep the number of counted days from a floor of 1 up to fully counted, for each
+# target x donor, single operational table. Also record the u=1 ratio floor.
+donor_lab <- c("Copalis" = "Copalis", "Mocrocks" = "Mocrocks",
+               "Copalis+Mocrocks" = "Copalis+Mocrocks (unavailable)")
+
+sweep_one <- function(target, donor, cf_model = "single") {
+  skel <- skeletons[[target]]; N <- nrow(skel)
+  ms <- unique(round(seq(1, N, length.out = n_grid)))
+  purrr::map_dfr(ms, function(m) {
+    counted <- choose_counted(skel, m)
+    r <- sim_cv(skel, counted, target, donor, cf_model, n_rep)
+    imp_eff_share <- sum(skel$meanE[!counted]) / sum(skel$meanE)
+    tibble(target, donor = unname(donor_lab[donor]), cf_model,
+           m_counted = m, pct_counted = m / N,
+           imputed_share = 1 - m / N, imputed_eff_share = imp_eff_share,
+           cv_eff = r$cv_eff, cv_harv = r$cv_harv)
+  })
+}
+
+set.seed(42)
+grid <- purrr::map_dfr(TARGETS, function(t)
+  purrr::map_dfr(c("Copalis", "Mocrocks", "Copalis+Mocrocks"),
+                 ~ sweep_one(t, .x, "single")))
+
+grid_long <- grid %>%
+  pivot_longer(c(cv_eff, cv_harv), names_to = "metric", values_to = "cv") %>%
+  mutate(metric = recode(metric, cv_eff = "Effort", cv_harv = "Harvest"))
+
+# u = 1 endpoint: the FULL-imputation (budget-elimination) floor — a systematic donor-ratio
+# drift, a different regime from the within-season sweep. Marked only on the effort panel.
+full_imp <- param_tbl %>%
+  transmute(target, donor = unname(donor_lab[donor]), metric = "Effort",
+            imputed_share = 1, cv = u1_ratio_floor)
+
+fig1 <- ggplot(grid_long,
+               aes(imputed_share, cv, color = donor, linetype = donor)) +
+  geom_hline(yintercept = CV_DESIGN, linetype = "dashed", color = "#4a8f5b") +
+  geom_hline(yintercept = CV_MRIP,   linetype = "dashed", color = "#C1666B") +
+  geom_line(linewidth = 1) + geom_point(size = 1.4) +
+  geom_point(data = full_imp, aes(imputed_share, cv, color = donor),
+             shape = 8, size = 3, stroke = 1.1, inherit.aes = FALSE, show.legend = FALSE) +
+  facet_grid(metric ~ target, scales = "free_y") +
+  scale_x_continuous("Share of the beach's open days that are IMPUTED (borrowed from one donor)",
+                     labels = percent_format(accuracy = 1)) +
+  scale_y_continuous("Season estimate CV") +
+  scale_color_manual(values = DONOR_COL, name = "Single donor") +
+  scale_linetype_manual(values = c("Copalis" = "solid", "Mocrocks" = "solid",
+                                   "Copalis+Mocrocks (unavailable)" = "dotted"),
+                        name = "Single donor") +
+  labs(title = "Season CV rises with the imputed share — and the donor choice matters",
+       subtitle = paste0("Long Beach & Twin Harbors, ", planning_season,
+                         " season shape. Green = 0.20 design target, red = MRIP 0.30. Joint donor ",
+                         "(grey, dotted) is unbuildable under 2-on/2-off co-management. Stars on the ",
+                         "effort row = the u=1 full-imputation (budget-cut) floor, a separate regime.")) +
+  my_theme
+fig1
+save_plot(fig1, "cv_curves", "fig1_cv_vs_imputed_by_donor.png", w = 11, h = 8)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 9: FIGURE 2 — does modelling daylight vs evening differently change the answer?
+# ═══════════════════════════════════════════════════════════════════════════════
+
+The current practice applies **one** correction-factor table per beach. The survey record
+supports separate **daylight** and **evening** tables. For LB and TH the daylight tables
+rest on only 3 and 5 old surveys, so splitting by condition *raises* their CF error unless
+new egress surveys are run. This figure contrasts the two CF models on the effort CV.
+
+```{r cf_model}
+set.seed(42)
+grid_cf <- purrr::map_dfr(TARGETS, function(t)
+  purrr::map_dfr(c("single", "condition"), ~ sweep_one(t, "Copalis", .x))) %>%
+  mutate(cf_lab = recode(cf_model, single = "One operational table (current)",
+                         condition = "Separate daylight / evening tables"))
+
+fig2 <- ggplot(grid_cf, aes(imputed_share, cv_eff, color = cf_lab)) +
+  geom_hline(yintercept = CV_DESIGN, linetype = "dashed", color = "#4a8f5b") +
+  geom_line(linewidth = 1) + geom_point(size = 1.3) +
+  facet_wrap(~ target) +
+  scale_x_continuous("Imputed share of open days", labels = percent_format(accuracy = 1)) +
+  scale_y_continuous("Season EFFORT CV") +
+  scale_color_manual(values = c("One operational table (current)" = "#1B4965",
+                                "Separate daylight / evening tables" = "#E0A458"),
+                     name = NULL) +
+  labs(title = "Splitting the correction factor by light condition exposes thin daylight tables",
+       subtitle = "Long Beach & Twin Harbors have only 3 and 5 daylight surveys (newest 2011); condition-specific tables raise their CF floor until resurveyed.") +
+  my_theme
+fig2
+save_plot(fig2, "cf_model", "fig2_cf_single_vs_condition.png", w = 11, h = 5)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 10: FIGURE 3 — season-part stratification (fall / winter / spring)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Fall openers fall on evening tides (noisier imputation, sd 0.616) and use the evening CF
+table; spring openers are morning/daylight (imputation sd 0.508) and use the daylight
+table. We re-run the sweep on each season-part sub-skeleton to show where imputation is
+most affordable.
+
+```{r season_part}
+sweep_part <- function(target, part, donor = "Copalis", cf_model = "single") {
+  full <- skeletons[[target]]
+  skel <- full %>% filter(part == !!part)
+  if (nrow(skel) < 2) return(NULL)
+  N <- nrow(skel); ms <- unique(round(seq(1, N, length.out = min(n_grid, N))))
+  purrr::map_dfr(ms, function(m) {
+    counted <- choose_counted(skel, m)
+    r <- sim_cv(skel, counted, target, donor, cf_model, n_rep)
+    tibble(target, part, imputed_share = 1 - m / N,
+           cv_eff = r$cv_eff, cv_harv = r$cv_harv)
+  })
+}
+
+set.seed(42)
+grid_part <- purrr::map_dfr(TARGETS, function(t)
+  purrr::map_dfr(c("Fall", "Winter", "Spring"), ~ sweep_part(t, .x)))
+
+fig3 <- ggplot(grid_part, aes(imputed_share, cv_harv, color = part)) +
+  geom_hline(yintercept = CV_DESIGN, linetype = "dashed", color = "#4a8f5b") +
+  geom_line(linewidth = 1) + geom_point(size = 1.3) +
+  facet_wrap(~ target) +
+  scale_x_continuous("Imputed share of that part's open days", labels = percent_format(accuracy = 1)) +
+  scale_y_continuous("Season-part HARVEST CV") +
+  scale_color_manual(values = c(Fall = "#C1666B", Winter = "#1B4965", Spring = "#4a8f5b"),
+                     name = "Season part") +
+  labs(title = "Which part of the season tolerates imputation best?",
+       subtitle = "Fall (evening tides) carries the noisiest imputation; spring (morning/daylight) the least. Donor = Copalis, one operational table.") +
+  my_theme
+fig3
+save_plot(fig3, "season_part", "fig3_cv_by_season_part.png", w = 11, h = 5)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 11: FIGURE 4 + TABLE — maximum imputable share to hit each CV target
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Inverting the curves: for each target x donor x metric, the largest imputed share that
+still meets a CV target. This is the staffing-decision table — "how few days can we
+count and still publish?"
+
+```{r decision}
+max_imputable <- function(sub, cv_target) {
+  # sub: rows for one target/donor/metric ordered by imputed_share ascending
+  ok <- sub$cv <= cv_target
+  if (!any(ok)) return(0)
+  max(sub$imputed_share[ok])
+}
+
+dec <- grid_long %>%
+  filter(donor != "Copalis+Mocrocks (unavailable)") %>%
+  group_by(target, donor, metric) %>%
+  arrange(imputed_share, .by_group = TRUE) %>%
+  group_modify(~ tibble(
+    `CV<=0.15` = max_imputable(.x, CV_TIGHT),
+    `CV<=0.20` = max_imputable(.x, CV_DESIGN),
+    `CV<=0.30` = max_imputable(.x, CV_MRIP))) %>%
+  ungroup()
+
+dec_long <- dec %>%
+  pivot_longer(starts_with("CV<="), names_to = "cv_target", values_to = "max_imp")
+
+fig4 <- ggplot(dec_long,
+               aes(cv_target, interaction(metric, donor, sep = " · "), fill = max_imp)) +
+  geom_tile(color = "white", linewidth = 1) +
+  geom_text(aes(label = percent(max_imp, accuracy = 1)), size = 4) +
+  facet_wrap(~ target) +
+  scale_fill_gradient2("Max imputable share", low = "#C1666B", mid = "#E0A458",
+                       high = "#4a8f5b", midpoint = 0.5, labels = percent) +
+  labs(title = "How much of each beach may be imputed and still meet a CV target",
+       subtitle = "Higher (green) = more days can be borrowed. Effort tolerates far more imputation than harvest, because harvest carries the un-averaging CPUE-transfer error.",
+       x = "CV target", y = NULL) +
+  my_theme + theme(legend.position = "right")
+fig4
+save_plot(fig4, "decision", "fig4_max_imputable_share.png", w = 12, h = 6)
+
+readr::write_csv(dec_long, file.path(folder_name, "tables", "decision_max_imputable_share.csv"))
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 12: FIGURE 5 — crew-day frontier for the 2026-27 plan
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Translate to field cost. A Long Beach full count is two events (a north and a south
+segment walk), so it costs **2 crew-day units**; a Twin Harbors count costs **1**.
+Copalis and Mocrocks are held at their co-management floor (one of the pair counted every
+state dig day) and are not the lever here. We hold harvest CV as the reported metric and
+trace the achievable CV against the crew-day budget spent counting LB and TH.
+
+```{r crew}
+crew_unit <- c("Long Beach" = 2, "Twin Harbors" = 1)
+
+crew_curve <- function(target, donor = "Copalis") {
+  skel <- skeletons[[target]]; N <- nrow(skel); u <- crew_unit[target]
+  ms <- unique(round(seq(1, N, length.out = n_grid)))
+  purrr::map_dfr(ms, function(m) {
+    counted <- choose_counted(skel, m)
+    r <- sim_cv(skel, counted, target, donor, "single", n_rep)
+    tibble(target, m_counted = m, crew_days = m * u,
+           cv_eff = r$cv_eff, cv_harv = r$cv_harv)
+  })
+}
+
+set.seed(42)
+crew <- purrr::map_dfr(TARGETS, crew_curve)
+status_quo <- tibble(
+  target = TARGETS,
+  crew_days = sapply(TARGETS, function(b)
+    round(actual_counted_share[b] * nrow(skeletons[[b]])) * crew_unit[b]))
+
+fig5 <- ggplot(crew, aes(crew_days, cv_harv, color = target)) +
+  geom_hline(yintercept = CV_DESIGN, linetype = "dashed", color = "#4a8f5b") +
+  geom_hline(yintercept = CV_MRIP,   linetype = "dashed", color = "#C1666B") +
+  geom_line(linewidth = 1) + geom_point(size = 1.3) +
+  geom_vline(data = status_quo, aes(xintercept = crew_days, color = target),
+             linetype = "dotted", linewidth = 0.8, show.legend = FALSE) +
+  scale_color_manual(values = BEACH_COL, name = "Target beach") +
+  labs(title = "Crew-day frontier: harvest CV vs days spent counting (2026-27 shape)",
+       subtitle = "LB counted day = 2 crew-units (two-section walk); TH = 1. Dotted verticals mark the 2025-26 status quo. Donor = Copalis, one operational table.",
+       x = "Crew-day units spent counting the target beach",
+       y = "Season HARVEST CV") +
+  my_theme
+fig5
+save_plot(fig5, "crew_days", "fig5_crew_day_frontier.png", w = 11, h = 6)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 13: FIGURE 6 — variance composition as imputation rises (Long Beach harvest)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Why harvest is hard to buy down: as the imputed share rises, the CPUE-transfer term (with
+its irreducible season component) takes over the harvest variance, so counting a few more
+days barely moves it — the lever is measured CPUE and egress surveys, not day-counts.
+
+```{r variance_comp}
+set.seed(42)
+comp <- function(target, donor = "Copalis") {
+  skel <- skeletons[[target]]; N <- nrow(skel)
+  ms <- unique(round(seq(1, N, length.out = n_grid)))
+  purrr::map_dfr(ms, function(m) {
+    counted <- choose_counted(skel, m)
+    s <- function(...) sim_cv(skel, counted, target, donor, "single", n_rep, ...)$cv_harv
+    cf  <- s(use_cf=TRUE,  use_int=FALSE, use_imp=FALSE, use_cpue_meas=FALSE, use_cpue_transfer=FALSE)
+    int <- s(use_cf=FALSE, use_int=TRUE,  use_imp=FALSE, use_cpue_meas=TRUE,  use_cpue_transfer=FALSE)
+    im  <- s(use_cf=FALSE, use_int=FALSE, use_imp=TRUE,  use_cpue_meas=FALSE, use_cpue_transfer=FALSE)
+    cpt <- s(use_cf=FALSE, use_int=FALSE, use_imp=FALSE, use_cpue_meas=FALSE, use_cpue_transfer=TRUE )
+    tot <- cf^2 + int^2 + im^2 + cpt^2
+    tibble(target, imputed_share = 1 - m / N,
+           `Correction factor` = cf^2/tot, `Interviews / measured CPUE` = int^2/tot,
+           `Imputation` = im^2/tot, `CPUE transfer` = cpt^2/tot)
+  })
+}
+comp_lb <- comp("Long Beach") %>%
+  pivot_longer(-c(target, imputed_share), names_to = "source", values_to = "share")
+
+fig6 <- ggplot(comp_lb, aes(imputed_share, share, fill = source)) +
+  geom_area(color = "white", linewidth = 0.2) +
+  scale_x_continuous("Imputed share of open days", labels = percent_format(accuracy = 1)) +
+  scale_y_continuous("Share of season HARVEST variance", labels = percent) +
+  scale_fill_manual(values = c("Correction factor" = "#1B4965",
+                               "Interviews / measured CPUE" = "#4A7BA6",
+                               "Imputation" = "#E0A458", "CPUE transfer" = "#C1666B"),
+                    name = NULL) +
+  labs(title = "Long Beach harvest: CPUE transfer takes over as imputation rises",
+       subtitle = "The CPUE-transfer error has a season-level component that does not average down — so counting more days cannot remove it; measured CPUE and egress surveys can.") +
+  my_theme + theme(legend.position = "right")
+fig6
+save_plot(fig6, "variance", "fig6_variance_composition_lb.png", w = 11, h = 6)
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 14: WRITE THE FULL CV GRID + PARAMETERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r write_outputs}
+readr::write_csv(grid,       file.path(folder_name, "tables", "cv_grid_by_donor.csv"))
+readr::write_csv(grid_cf,    file.path(folder_name, "tables", "cv_grid_cf_model.csv"))
+readr::write_csv(grid_part,  file.path(folder_name, "tables", "cv_grid_season_part.csv"))
+readr::write_csv(crew,       file.path(folder_name, "tables", "crew_day_frontier.csv"))
+readr::write_csv(param_tbl,  file.path(folder_name, "tables", "model_parameters.csv"))
+readr::write_csv(val,        file.path(folder_name, "validation", "validation_vs_published.csv"))
+cat("Wrote CV grids, decision table, parameters, and validation to", folder_name, "\n")
+```
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 15: HEADLINE NUMBERS FOR THE 2026-27 STAFFING DECISION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+```{r headline}
+# For each target/donor: the counted share needed to hit the 0.20 harvest design target,
+# and the donor penalty vs the (unavailable) joint donor.
+answer <- grid %>%
+  group_by(target, donor) %>%
+  arrange(imputed_share, .by_group = TRUE) %>%
+  summarise(
+    min_counted_for_harvest_0.20 = {
+      ok <- cv_harv <= CV_DESIGN
+      if (any(ok)) 1 - max(imputed_share[ok]) else NA_real_
+    },
+    min_counted_for_effort_0.20 = {
+      ok <- cv_eff <= CV_DESIGN
+      if (any(ok)) 1 - max(imputed_share[ok]) else NA_real_
+    }, .groups = "drop") %>%
+  mutate(across(starts_with("min_counted"), ~ round(.x, 2)))
+answer
+
+cat("\n--- 2026-27 staffing read-out (", planning_season, "skeleton ) ---\n")
+cat("Actual", planning_season, "counted share:  Long Beach",
+    round(actual_counted_share["Long Beach"], 2),
+    "| Twin Harbors", round(actual_counted_share["Twin Harbors"], 2), "\n")
+cat("u=1 (full-imputation) systematic floors, log-sd of the season ratio:\n")
+print(param_tbl %>% select(target, donor, u1_ratio_floor) %>%
+        mutate(u1_ratio_floor = round(u1_ratio_floor, 3)))
+cat("\nInterpretation: for EFFORT the CF floor and averaging-down imputation let a beach be\n",
+    "heavily borrowed and still meet 0.20; for HARVEST the CPUE-transfer floor binds, so\n",
+    "harvest is the constraint that sets how few days may be counted. Copalis is the better\n",
+    "single donor for Twin Harbors; the two donors are close for Long Beach. The joint donor\n",
+    "would beat both but cannot be built under co-management.\n")
+```

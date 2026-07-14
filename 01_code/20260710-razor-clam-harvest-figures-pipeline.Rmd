@@ -1,12 +1,12 @@
 ---
-title: "Razor Clam Harvest Monitoring — Figure Pipeline (v9)"
+title: "Razor Clam Harvest Monitoring — Figure Pipeline (v10)"
 author: "Matthew George"
 date: "`r Sys.Date()`"
 output: html_document
 ---
 
 <!--
-  Reproduces every figure in 2026-Review-WDFW_Harvest_Estimate_Methodology-v9.docx
+  Reproduces every figure in 2026-Review-WDFW_Harvest_Estimate_Methodology-v10.docx
   from the consolidated tidy CSVs in 02_data/consolidated/. Outputs are written to a
   dated subfolder under 03_analyses/. Follows the razor-clam-recruitment-analysis
   template: load.lib install loop, my_theme, dir.create output tree, ggsave(dpi=300).
@@ -386,7 +386,8 @@ p_fig6 <- ggplot(fig6_df, aes(x = window_mid, y = rel_sd * 100, color = beach)) 
        y = "Relative sd of the correction factor",
        title = "Correction-factor relative sd as a function of count-window position",
        subtitle = paste0("Bootstrap of the egress surveys (", n_boot,
-                         " reps); open squares = modal window used"),
+                         " reps); Twin Harbors and Long Beach (fewest surveys) carry the highest sd. ",
+                         "Open squares = modal window used"),
        color = NULL) +
   scale_y_continuous(labels = function(v) paste0(v, "%")) +
   my_theme + theme(legend.position = "bottom")
@@ -413,7 +414,7 @@ p_fig7 <- cf_cv %>%
   scale_color_manual(values = beach_colors) +
   labs(x = NULL, y = "Within-season CV of the correction factor",
        title = "Within-season coefficient of variation of the stored correction factor",
-       subtitle = "Standardized logging (lower spread) begins 2023-24", color = NULL) +
+       subtitle = "Per beach-season CV; standardized logging (lower spread) begins 2023-24", color = NULL) +
   my_theme +
   theme(legend.position = "bottom",
         axis.text.x = element_text(size = 11, angle = 60, hjust = 1))
@@ -487,31 +488,52 @@ print(p_fig9); save_plot(p_fig9, "expansion_tables", "fig09_operational_vs_vinta
 # SECTION 12: FIGURE 10 — VARIANCE SHARES BY SOURCE  (2019-20 onward)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-```{r fig.width=11, fig.height=6}
+```{r fig.width=12, fig.height=6}
 vd <- var_decomp %>%
   mutate(beach = as_beach(beach)) %>%
   filter(season >= "2019-20", beach %in% beach_expand)
 
-vd_long <- vd %>%
-  select(beach,
-         `Correction factor` = effort_correction_factor,
-         `Interviews`        = effort_interviews,
-         `Imputation`        = effort_imputation) %>%
-  mutate(across(-beach, ~ suppressWarnings(as.numeric(.)))) %>%
+# v10 Figure 14: two panels (effort | harvest). Harvest carries a fourth source, CPUE transfer,
+# which exists only because catch rate is borrowed on an uncounted day. Averaged 2019-20 onward.
+eff_long <- vd %>%
+  transmute(beach,
+            `Correction factor` = suppressWarnings(as.numeric(effort_correction_factor)),
+            `Interviews`        = suppressWarnings(as.numeric(effort_interviews)),
+            `Imputation`        = suppressWarnings(as.numeric(effort_imputation))) %>%
   group_by(beach) %>% summarise(across(everything(), ~ mean(., na.rm = TRUE)), .groups = "drop") %>%
-  pivot_longer(-beach, names_to = "source", values_to = "share")
+  pivot_longer(-beach, names_to = "source", values_to = "share") %>% mutate(quantity = "Effort")
+
+har_long <- vd %>%
+  transmute(beach,
+            `Correction factor` = suppressWarnings(as.numeric(harvest_correction_factor)),
+            `CPUE transfer`     = suppressWarnings(as.numeric(harvest_cpue_transfer)),
+            `Imputation`        = suppressWarnings(as.numeric(harvest_imputation)),
+            `Interviews`        = suppressWarnings(as.numeric(harvest_interviews))) %>%
+  group_by(beach) %>% summarise(across(everything(), ~ mean(., na.rm = TRUE)), .groups = "drop") %>%
+  pivot_longer(-beach, names_to = "source", values_to = "share") %>% mutate(quantity = "Harvest")
+
+vd_long <- bind_rows(eff_long, har_long) %>%
+  mutate(quantity = factor(quantity, levels = c("Effort", "Harvest")),
+         source   = factor(source, levels = c("Correction factor", "CPUE transfer",
+                                              "Imputation", "Interviews")))
 
 p_fig10 <- ggplot(vd_long, aes(x = fct_rev(beach), y = share, fill = source)) +
   geom_col(position = "stack", color = "black", linewidth = 0.3) +
   coord_flip() +                                   # switch axes: beaches now on the vertical
-  scale_fill_manual(values = c("Correction factor" = "#1B4965",
-                               "Interviews" = "#5FA8D3", "Imputation" = "#E0A458")) +
+  facet_wrap(~ quantity) +
+  scale_fill_manual(values = c("Correction factor" = "#1B4965", "CPUE transfer" = "#C1666B",
+                               "Imputation" = "#E0A458", "Interviews" = "#5FA8D3")) +
   scale_y_continuous(labels = percent) +
-  labs(x = NULL, y = "Share of season-total effort variance",
-       title = "Variance shares of the season effort total, by source",
-       subtitle = "Mean over 2019-20 onward; the correction factor dominates", fill = NULL) +
-  my_theme + theme(legend.position = "bottom")
-print(p_fig10); save_plot(p_fig10, "uncertainty", "fig10_variance_shares.png", w = 11, h = 6)
+  labs(x = NULL, y = "Share of season-total variance",
+       title = "Variance shares of the season total, by source",
+       subtitle = paste("Mean over 2019-20 onward. Left: effort. Right: harvest.",
+                        "CPUE transfer dominates harvest at Long Beach and Twin Harbors"),
+       fill = NULL) +
+  my_theme +
+  theme(legend.position = "bottom",
+        strip.background = element_rect(fill = "grey92", color = "black"),
+        strip.text = element_text(size = 12))
+print(p_fig10); save_plot(p_fig10, "uncertainty", "fig10_variance_shares.png", w = 12, h = 6)
 ```
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -624,15 +646,20 @@ print(p_fig12); save_plot(p_fig12, "uncertainty", "fig12_season_effort_corrected
 # open days are counted, for 4-day and 5-day series. Monte Carlo: within a series, sample
 # the counted subset, impute the rest with lognormal imputation error, add the beach's
 # correction-factor floor (relative sd), and take the CV of the series total over reps.
-cf_floor <- cf_windows %>% clean_names() %>%
-  filter(str_detect(str_to_lower(coalesce(modal_window, "")), "yes|modal|true")) %>%
-  transmute(beach = as_beach(beach), rel_sd = as.numeric(relative_sd)) %>%
-  group_by(beach) %>% summarise(cf_rel_sd = mean(rel_sd, na.rm = TRUE), .groups = "drop")
-if (nrow(cf_floor) == 0) {   # fallback from cf_uncertainty
-  cf_floor <- cf_uncert %>% clean_names() %>%
-    filter(str_detect(str_to_lower(coalesce(used_as_the_modal_window, "")), "yes|true")) %>%
+# v10 correction-factor floors: the between-survey relative sd of each beach's 2012-2013
+# expansion table at its modal count window (v10 Tables 17/19). cf_uncertainty holds one modal
+# row per beach and reproduces the published floors exactly — Long Beach 0.056, Twin Harbors
+# 0.051, Copalis 0.126, Mocrocks 0.095. The condition-split cf_windows is only a fallback
+# (its daylight/evening average does NOT match the v10 per-beach floors).
+cf_floor <- cf_uncert %>% clean_names() %>%
+  filter(str_detect(str_to_lower(coalesce(used_as_the_modal_window, "")), "yes|true")) %>%
+  transmute(beach = as_beach(beach), cf_rel_sd = as.numeric(relative_sd)) %>%
+  group_by(beach) %>% summarise(cf_rel_sd = mean(cf_rel_sd, na.rm = TRUE), .groups = "drop")
+if (nrow(cf_floor) == 0) {   # fallback: condition-averaged cf_windows modal rows
+  cf_floor <- cf_windows %>% clean_names() %>%
+    filter(str_detect(str_to_lower(coalesce(modal_window, "")), "yes|modal|true")) %>%
     transmute(beach = as_beach(beach), cf_rel_sd = as.numeric(relative_sd)) %>%
-    group_by(beach) %>% summarise(cf_rel_sd = mean(cf_rel_sd), .groups = "drop")
+    group_by(beach) %>% summarise(cf_rel_sd = mean(cf_rel_sd, na.rm = TRUE), .groups = "drop")
 }
 imp_sd <- sd(val_days$log_error[is.finite(val_days$log_error)], na.rm = TRUE)   # per-day imputation log-sd
 
@@ -659,12 +686,16 @@ fig13 <- expand_grid(beach = cf_floor$beach, series_len = c(4, 5)) %>%
   unnest(pts) %>% ungroup() %>% mutate(beach = as_beach(beach))
 
 p_fig13 <- ggplot(fig13, aes(x = m, y = cv, color = beach, linetype = factor(series_len))) +
+  geom_hline(data = cf_floor, aes(yintercept = cf_rel_sd, color = beach),
+             linetype = "dotted", linewidth = 0.7, show.legend = FALSE) +
   geom_hline(yintercept = 0.20, linetype = "dashed", color = "#4a8f5b") +
+  geom_hline(yintercept = 0.30, linetype = "dashed", color = "#8a3b3f") +
   geom_line(linewidth = 1) + geom_point(size = 2) +
   scale_color_manual(values = beach_colors) +
   labs(x = "Days counted in the tide series", y = "Harvest CV of the series estimate",
        title = "Tide-series CV as a function of days counted",
-       subtitle = "Green dashed = CV 0.20 design target; solid=4-day, dashed=5-day series",
+       subtitle = paste("Green dashed = CV 0.20 design target; dark-red dashed = MRIP PSE 30;",
+                        "dotted = each beach's correction-factor floor. Solid=4-day, dashed=5-day"),
        color = NULL, linetype = "Series length") +
   my_theme + theme(legend.position = "bottom")
 print(p_fig13); save_plot(p_fig13, "sampling_design", "fig13_tide_series_cv.png", w = 10, h = 6)
@@ -688,7 +719,7 @@ sim_season_cv <- function(imp_share, cf_rel_sd, n_days = 60, reps = 3000) {
   sd(vals) / mean(vals)
 }
 now_imp <- tibble(beach = as_beach(c("Long Beach","Twin Harbors","Copalis","Mocrocks")),
-                  imp_now = c(0.85, 0.36, 0.00, 0.00))   # 2025-26 imputed shares (v9 Fig 14)
+                  imp_now = c(0.85, 0.36, 0.00, 0.00))   # 2025-26 imputed shares (matches v10 Fig 18)
 
 fig14 <- expand_grid(beach = cf_floor$beach, imp_share = seq(0, 0.9, 0.05)) %>%
   left_join(cf_floor, by = "beach") %>%
@@ -697,6 +728,7 @@ fig14 <- expand_grid(beach = cf_floor$beach, imp_share = seq(0, 0.9, 0.05)) %>%
 
 p_fig14 <- ggplot(fig14, aes(x = imp_share, y = cv, color = beach)) +
   geom_hline(yintercept = 0.20, linetype = "dashed", color = "#4a8f5b") +
+  geom_hline(yintercept = 0.10, linetype = "dashed", color = "#9AA5AD") +
   geom_line(linewidth = 1) +
   geom_point(data = now_imp %>% left_join(cf_floor, by = "beach") %>%
                mutate(cv = map2_dbl(imp_now, cf_rel_sd, ~ sim_season_cv(.x, .y))),
@@ -705,7 +737,9 @@ p_fig14 <- ggplot(fig14, aes(x = imp_share, y = cv, color = beach)) +
   scale_x_continuous(labels = percent) +
   labs(x = "Share of season harvest imputed", y = "Season harvest CV",
        title = "Season harvest CV as a function of imputed share",
-       subtitle = "Stars = each beach's 2025-26 position; green dashed = CV 0.20", color = NULL) +
+       subtitle = paste("Stars = each beach's 2025-26 position; dashed = CV 0.20 (green) and 0.10",
+                        "(grey); the intercept at zero imputation is the correction-factor floor"),
+       color = NULL) +
   my_theme + theme(legend.position = "bottom")
 print(p_fig14); save_plot(p_fig14, "sampling_design", "fig14_season_cv_vs_imputed.png", w = 10, h = 6)
 ```
@@ -949,11 +983,15 @@ print(p_fig19); save_plot(p_fig19, "schematics", "fig19_joint_donor.png", w = 13
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ```{r fig.width=12, fig.height=7}
-# Long Beach anatomy (Section 5.4): 7 segments walked in a north-4 and a south-3 count, plus the
+# Long Beach anatomy (Section 5.4): 7 segments walked in a south-4 and a north-3 count, plus the
 # CF-from-one-end assumption and the two imputation layers.
-seg <- tibble(id=c("12600","12500","12400","12300","11200","11104","11101"),
-  name=c("Seaview","Long Beach","Cranberry","Klipsan","Ocean Park","","Oysterville"), x=1:7,
-  half=c("S","S","S","N","N","N","N"))
+# Segment IDs increase NORTHWARD (lut_Beach: 11101 = Beard's Hollow–Seaview at the SOUTH end;
+# 12600 = South Boundary of Reserve–Leadbetter Point at the NORTH end). The four-segment count
+# (11101,11104,11200,12300) is the southern half; the three-segment count (12400,12500,12600) is
+# the northern half (v10 section 5.4). Labelled S->N by each segment's south-boundary approach.
+seg <- tibble(id=c("11101","11104","11200","12300","12400","12500","12600"),
+  name=c("Seaview","Long Beach","Cranberry","Klipsan","Ocean Park","Oysterville","Leadbetter"), x=1:7,
+  half=c("S","S","S","S","N","N","N"))
 seg$fill <- ifelse(seg$half=="N", BLUE, AMBER)
 p_fig20 <- ggplot() +
   geom_rect(data=seg, aes(xmin=x-0.46,xmax=x+0.46,ymin=5.2,ymax=6.4,fill=fill),color="white",linewidth=1.1) +
@@ -962,10 +1000,10 @@ p_fig20 <- ggplot() +
   annotate("segment",x=0.5,xend=7.5,y=6.7,yend=6.7,arrow=arrow(length=unit(0.15,"cm"),ends="both"),color=GREY) +
   annotate("text",x=0.6,y=6.95,label="SOUTH (Beard's Hollow)",hjust=0,size=3,color=GREY) +
   annotate("text",x=7.4,y=6.95,label="NORTH (Leadbetter Pt.)",hjust=1,size=3,color=GREY) +
-  annotate("segment",x=1,xend=3,y=4.5,yend=4.5,color=AMBER,linewidth=1.3) +
-  annotate("text",x=2,y=4.2,label="South 3-segment count",size=3.2,color=AMBER,fontface="bold") +
-  annotate("segment",x=4,xend=7,y=4.5,yend=4.5,color=BLUE,linewidth=1.3) +
-  annotate("text",x=5.5,y=4.2,label="North 4-segment count",size=3.2,color=BLUE,fontface="bold") +
+  annotate("segment",x=1,xend=4,y=4.5,yend=4.5,color=AMBER,linewidth=1.3) +
+  annotate("text",x=2.5,y=4.2,label="South 4-segment count",size=3.2,color=AMBER,fontface="bold") +
+  annotate("segment",x=5,xend=7,y=4.5,yend=4.5,color=BLUE,linewidth=1.3) +
+  annotate("text",x=6,y=4.2,label="North 3-segment count",size=3.2,color=BLUE,fontface="bold") +
   geom_rect(aes(xmin=0.5,xmax=7.5,ymin=2.7,ymax=3.6),fill=RED,alpha=0.13) +
   annotate("text",x=0.7,y=3.15,hjust=0,size=3.25,color=RED,fontface="bold",
     label="Assumption 1.  The egress survey that sets the correction factor has only ever\ncovered ONE end (Oysterville-north or Seaview-south), yet CF is applied to the whole beach") +
