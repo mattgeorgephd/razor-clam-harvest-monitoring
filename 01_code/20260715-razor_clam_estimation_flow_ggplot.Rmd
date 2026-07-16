@@ -1,0 +1,273 @@
+---
+title: "Razor Clam Harvest Estimation: Single-Beach Flow Diagram (ggplot2)"
+author: "Matthew George"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+<!--
+  Reproduces the simplified single-beach harvest-estimation flow diagram (the slide
+  version) natively in ggplot2, so it can be regenerated and restyled inside the repo.
+
+  It is a hand-laid schematic (geom_polygon rounded cards + geom_path elbow arrows +
+  geom_text), NOT a data plot, so there are no input CSVs; everything is defined below.
+  Dependencies: ggplot2 only (base R does the rest). `here` is used for the output path
+  if available. `ragg`/cairo are used for crisp UTF-8 glyph rendering if available.
+
+  Method reference: Effort_Expansion_Protocol.md sec 3; companion to
+  03_analyses/20260713-harvest-figures/schematics/fig17_estimation_flow.png.
+-->
+
+```{r setup, include=FALSE}
+# UTF-8-capable raster device so the math glyphs render (x, /, Sigma, arrow, middot).
+options(bitmapType = "cairo")
+use_ragg <- requireNamespace("ragg", quietly = TRUE)
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  dev      = if (use_ragg) "ragg_png" else "png",
+  dev.args = if (use_ragg) list() else list(type = "cairo"),
+  fig.width = 13.333, fig.height = 8.33, dpi = 150, out.width = "100%"  # height matches the HS=1.25 layout
+)
+```
+
+# -- 0. Toggles ----------------------------------------------------------------
+
+```{r toggles}
+save_fig <- TRUE   # write PNG + PDF to disk (set FALSE for quick preview-only reruns)
+
+# Output folder: the harvest-figures schematics dir if the repo root is found, else ./figures
+out_dir <- tryCatch(
+  here::here("03_analyses", "20260713-harvest-figures", "schematics"),
+  error = function(e) "figures"
+)
+fig_stem <- "razor_clam_estimation_flow_ggplot"
+```
+
+# -- 1. Packages ---------------------------------------------------------------
+
+```{r packages}
+## Load packages (template install loop; only ggplot2 is required)
+load.lib <- c("ggplot2", "here")
+install.lib <- load.lib[!load.lib %in% installed.packages()[, "Package"]]
+for (lib in install.lib) install.packages(lib, dependencies = TRUE)
+suppressMessages(invisible(lapply(load.lib, require, character.only = TRUE)))
+library(grid)  # unit(), arrow() - base package, always available
+```
+
+# -- 2. Palette, glyphs, canvas ------------------------------------------------
+
+```{r palette}
+# Palette echoes the reference CF figure (amber daylight / navy night / cream / steel)
+PAGE   <- "#FBF7EE"; INK      <- "#20303F"
+NAVY   <- "#21395B"; NAVY_MED <- "#2F4E77"; NAVY_DK <- "#182B44"
+AMBER  <- "#E09A3D"; AMBER_DK <- "#B06E22"
+TAN    <- "#F2E1C0"; CREAM    <- "#FBF1D6"; CREAM2  <- "#FCF6E6"
+STEEL  <- "#5C7EA8"; STEEL_LT <- "#E5ECF4"; STEEL_MD<- "#A9BCD2"
+BODY_LT<- "#EEF2F6"; MUTED    <- "#6C7280"; LINE    <- "#3A4C63"; BORDER <- "#D9D2C4"
+
+# Math glyphs built from code points -> locale-independent, ASCII source, no encoding risk
+MUL <- intToUtf8(0x00D7)  # times
+DIV <- intToUtf8(0x00F7)  # divide
+SIG <- intToUtf8(0x03A3)  # Sigma
+ARR <- intToUtf8(0x2192)  # arrow
+MID <- intToUtf8(0x00B7)  # middot
+
+W <- 1920; H <- 1080          # W = canvas width; H is recomputed from the layout (nodes chunk)
+yy <- function(y) H - y       # convert a top-down (SVG-style) y to ggplot's y-up
+CWU <- 2.85                   # ~data-units per character at a given text size (empirical)
+```
+
+# -- 3. Helper geometry + a card() builder -------------------------------------
+
+```{r helpers}
+bodies <- list(); headers <- list(); accents <- list()
+tb <- list(); th <- list(); ti <- list(); arrows_l <- list(); elabels <- list(); bi <- 0
+
+# corner arc, and rounded-rectangle / rounded-top polygons (plot coords)
+arc <- function(cx, cy, a0, a1, r, n = 12) {
+  t <- seq(a0, a1, length.out = n); data.frame(x = cx + r*cos(t), y = cy + r*sin(t))
+}
+rrect_up <- function(x0, y0, x1, y1, r, n = 12) rbind(
+  arc(x1-r, y1-r, 0,      pi/2,   r, n), arc(x0+r, y1-r, pi/2,   pi,     r, n),
+  arc(x0+r, y0+r, pi,     3*pi/2, r, n), arc(x1-r, y0+r, 3*pi/2, 2*pi,   r, n))
+rtop_up <- function(x0, y0, x1, y1, r, n = 12) rbind(
+  data.frame(x = x1, y = y0), arc(x1-r, y1-r, 0, pi/2, r, n),
+  arc(x0+r, y1-r, pi/2, pi, r, n), data.frame(x = x0, y = y0))
+wrapt <- function(s, width) paste(strwrap(s, width = width), collapse = "\n")
+
+# Add one card. Coordinates are given SVG-style (xl, yt = top-left; y grows downward).
+card <- function(xl, yt, w, h, title, hfill, bfill, sub = NULL, tag = NULL, accent = NULL,
+                 tsize = 4.2, ssize = 3.7, subcol = INK, hh = 50, solid = FALSE,
+                 tcol = "#FFFFFF", center = FALSE) {
+  bi <<- bi + 1; x0 <- xl; x1 <- xl + w; y0 <- yy(yt + h); y1 <- yy(yt)
+  if (solid) {
+    headers[[length(headers)+1]] <<- cbind(rrect_up(x0,y0,x1,y1,16), grp = paste0("s",bi), fill = hfill)
+  } else {
+    bodies[[length(bodies)+1]]   <<- cbind(rrect_up(x0,y0,x1,y1,14), grp = paste0("b",bi), fill = bfill)
+    headers[[length(headers)+1]] <<- cbind(rtop_up(x0, yy(yt+hh), x1, y1, 14), grp = paste0("h",bi), fill = hfill)
+  }
+  if (!is.null(accent))
+    accents[[length(accents)+1]] <<- data.frame(xmin=x0, xmax=x1, ymin=yy(yt+hh)-5, ymax=yy(yt+hh), fill=accent)
+  th_x <- if (center) (x0+x1)/2 else x0 + 16; hj <- if (center) 0.5 else 0
+  tb[[length(tb)+1]] <<- data.frame(x=th_x, y=yy(yt+hh/2), label=title, size=tsize, colour=tcol, hjust=hj, vjust=0.5)
+  if (!is.null(sub)) {
+    wrapw <- floor((w - 34) / (ssize * CWU))
+    th[[length(th)+1]] <<- data.frame(x=x0+16, y=yy(yt+hh+20), label=wrapt(sub, wrapw), size=ssize,
+                                      colour=subcol, hjust=0, vjust=1)
+  }
+  if (!is.null(tag))
+    th[[length(th)+1]] <<- data.frame(x=x1-15, y=yy(yt+hh/2), label=tag, size=3.05, colour="#FFFFFF", hjust=1, vjust=0.5)
+}
+addA <- function(pts, grp) {  # elbow arrow through a list of c(x, y) SVG-coord waypoints
+  df <- do.call(rbind, lapply(pts, function(p) data.frame(x = p[1], y = yy(p[2]))))
+  df$grp <- grp; arrows_l[[length(arrows_l)+1]] <<- df
+}
+addL <- function(x, y, label, colour = INK)   # operator label chip
+  elabels[[length(elabels)+1]] <<- data.frame(x=x, y=yy(y), label=label, colour=colour)
+```
+
+# -- 4. Nodes ------------------------------------------------------------------
+
+```{r nodes}
+# ---- Vertical layout ---------------------------------------------------------
+HS <- 1.25                         # bubble HEIGHT scale (1.00 = original heights)
+IH <- 126 * HS; PH <- 126 * HS     # input-row / parameter-row heights
+EH <- 104 * HS                     # Digger-trips (corrected daily effort) height
+DH <- 100 * HS                     # daily harvest / imputed / wastage heights
+MH <- 132 * HS                     # terminus height
+
+# Row gaps are held fixed as the bubbles grow, so all spacing is preserved.
+g_ip <- 52    # inputs      -> parameters
+g_ps <- 78    # parameters  -> Digger-trips  (the gap widened in the previous step)
+g_sh <- 60    # Digger-trips-> daily harvest
+g_ht <- 84    # daily harvest -> beach-season terminus
+
+IY <- 120                          # inputs top (SVG-style; y grows downward)
+PY <- IY + IH + g_ip               # parameters top
+EY <- PY + PH + g_ps               # Digger-trips top
+HY <- EY + EH + g_sh               # daily harvest / imputed / wastage top
+TY <- HY + DH + g_ht               # terminus top
+H  <- TY + MH + 70                 # canvas height grows to fit (yy() reads this global)
+
+CX <- c(50, 520, 990, 1460); CW <- 410; cen <- CX + CW/2
+
+# Field inputs (row 1)
+card(CX[1], IY, CW, IH, "Ingress / egress survey", NAVY, CREAM2, tag = "periodic", tsize = 3.8,
+     sub = "Diggers tracked over the tidal cycle; sets the effort-vs-tide curve.")
+card(CX[2], IY, CW, IH, "Beach count", NAVY, CREAM2, tag = "each dig day",
+     sub = "People counted on each segment at the reference time before low water.")
+card(CX[3], IY, CW, IH, "Creel interviews", NAVY, CREAM2, tag = "each dig day",
+     sub = "Digging groups sampled as they leave: people, diggers, clams.")
+card(CX[4], IY, CW, IH, "Wastage survey", NAVY, CREAM2, tag = "subset",
+     sub = "Holes dug and dead / wasted clams counted on the beach.")
+
+# Event-level parameters (row 2)
+card(CX[1], PY, CW, PH, "Correction factor (CF)", AMBER, TAN, accent = AMBER_DK,
+     sub = "Share of the day's diggers present at count time (~0.5-0.7); a preset from the ingress/egress surveys.")
+card(CX[2], PY, CW, PH, "People at count", NAVY_MED, BODY_LT,
+     sub = "People present at the snapshot, from the beach count.")
+card(CX[3], PY, CW, PH, "Event creel rates", NAVY_MED, BODY_LT,
+     sub = "CPUE = clams / diggers.  Digging fraction = diggers / people.")
+card(CX[4], PY, CW, PH, "Wastage rate", NAVY_MED, BODY_LT,
+     sub = "Dead clams / holes dug, pooled over the event.")
+
+# Expansion + daily harvest (spine)
+card(600, EY, 720, EH, paste("Digger-trips", MID, "corrected daily effort"), NAVY_DK, CREAM,
+     accent = AMBER, tsize = 5.4, ssize = 4.2,
+     sub = paste0("= people at count ", MUL, " digging fraction ", DIV, " CF. One count expanded to the whole day."))
+card(600, HY, 720, DH, "Daily harvest (counted day)", NAVY_DK, CREAM, accent = AMBER,
+     tsize = 5.4, ssize = 4.2, sub = paste0("= digger-trips ", MUL, " CPUE (clams)."))
+
+# Uncounted-day lane
+card(50, HY, 470, DH, paste("Uncounted day", ARR, "imputed harvest"), STEEL, STEEL_LT, accent = STEEL,
+     tsize = 4.5, ssize = 3.7,
+     sub = paste0("X_t = X_r ", MUL, " (D_t ", DIV, " D_r): scale a counted donor day, then ", MUL, " CPUE."))
+
+# Wastage side-output
+card(1400, HY, 470, DH, "Season wastage", NAVY_MED, BODY_LT, tsize = 4.5, ssize = 3.7,
+     sub = paste0("= ", SIG, " (daily harvest ", MUL, " wastage rate). Reported alongside harvest."))
+
+# Terminus
+card(520, TY, 880, MH, "BEACH-SEASON HARVEST ESTIMATE", NAVY_DK, NAVY_DK, solid = TRUE,
+     tsize = 7.2, center = TRUE, hh = 64)
+ti[[1]] <- data.frame(x = 960, y = yy(TY + 100),
+  label = paste0("= ", SIG, " daily harvest over all open dig days (counted + imputed)"),
+  size = 5.0, colour = CREAM, hjust = 0.5, vjust = 0.5, face = 1)
+ti[[2]] <- data.frame(x = 960, y = yy(TY + 128),
+  label = paste0("the same ", SIG, " over digger-trips gives the beach-season effort"),
+  size = 3.9, colour = STEEL_MD, hjust = 0.5, vjust = 0.5, face = 3)
+accents[[length(accents)+1]] <- data.frame(xmin = 520, xmax = 1400, ymin = yy(TY)-2, ymax = yy(TY)+5, fill = AMBER)
+```
+
+# -- 5. Arrows + operator labels -----------------------------------------------
+
+```{r arrows}
+for (cx in cen) addA(list(c(cx, IY+IH), c(cx, PY)), paste0("ip", cx))     # inputs -> params
+addA(list(c(cen[1], PY+PH), c(cen[1], EY+EH/2), c(600, EY+EH/2)), "cf")               # CF -> effort
+addA(list(c(cen[2], PY+PH), c(cen[2], EY-14), c(760, EY-14), c(760, EY)), "ppl")      # people -> effort
+addA(list(c(cen[3], PY+PH), c(cen[3], EY)), "dig")                                    # digging fraction
+addA(list(c(1250, PY+PH), c(1250, PY+PH+16), c(1372, PY+PH+16), c(1372, HY+DH/2), c(1320, HY+DH/2)), "cpue")
+addA(list(c(960, EY+EH), c(960, HY)), "eh")                                           # effort -> harvest
+addA(list(c(960, HY+DH), c(960, TY)), "hs")                                           # harvest -> season
+addA(list(c(285, HY+DH), c(285, (HY+DH+TY)/2), c(640, (HY+DH+TY)/2), c(640, TY)), "is")  # imputed -> season
+addA(list(c(cen[4], PY+PH), c(cen[4], HY-45), c(1635, HY-45), c(1635, HY)), "wr")     # wastage rate -> wastage
+addA(list(c(1320, HY+DH*0.7), c(1400, HY+DH*0.7)), "hw")                              # harvest -> wastage
+
+addL(408,  EY+EH/2,   paste(DIV, "CF"),               AMBER_DK)
+addL(1268, EY-20,     paste(MUL, "digging fraction"), INK)
+addL(1402, EY+EH*0.9, paste(MUL, "CPUE"),             INK)
+```
+
+# -- 6. Assemble + draw --------------------------------------------------------
+
+```{r build}
+bodies_df  <- do.call(rbind, bodies);  headers_df <- do.call(rbind, headers)
+accents_df <- do.call(rbind, accents); arrows_df  <- do.call(rbind, arrows_l)
+tb_df <- do.call(rbind, tb); thh_df <- do.call(rbind, th)
+ti_df <- do.call(rbind, ti); el_df  <- do.call(rbind, elabels)
+
+p <- ggplot() +
+  geom_polygon(data = bodies_df,  aes(x, y, group = grp, fill = fill), colour = BORDER, linewidth = 0.4) +
+  geom_polygon(data = headers_df, aes(x, y, group = grp, fill = fill), colour = NA) +
+  geom_rect(data = accents_df, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = fill)) +
+  geom_path(data = arrows_df, aes(x, y, group = grp), colour = LINE, linewidth = 0.8,
+            lineend = "round", linejoin = "round",
+            arrow = arrow(angle = 22, length = unit(0.22, "cm"), type = "closed")) +
+  geom_text(data = tb_df,  aes(x, y, label = label, size = size, colour = colour, hjust = hjust, vjust = vjust),
+            fontface = 2, lineheight = 0.9) +
+  geom_text(data = thh_df, aes(x, y, label = label, size = size, colour = colour, hjust = hjust, vjust = vjust),
+            fontface = 1, lineheight = 0.95) +
+  geom_text(data = ti_df[ti_df$face == 1, ], aes(x, y, label = label, size = size, colour = colour,
+            hjust = hjust, vjust = vjust), fontface = 1) +
+  geom_text(data = ti_df[ti_df$face == 3, ], aes(x, y, label = label, size = size, colour = colour,
+            hjust = hjust, vjust = vjust), fontface = 3) +
+  geom_label(data = el_df, aes(x, y, label = label, colour = colour), fill = PAGE,
+             label.size = 0.3, label.r = unit(0.12, "cm"), size = 4.3, fontface = 2) +
+  annotate("text", x = 50, y = yy(60), label = "How one beach's razor clam harvest estimate is built",
+           hjust = 0, vjust = 0.5, size = 9.0, fontface = 2, colour = NAVY) +
+  annotate("text", x = 50, y = yy(101), label = "From field data to the season total.",
+           hjust = 0, vjust = 0.5, size = 4.8, colour = MUTED) +
+  scale_fill_identity() + scale_colour_identity() + scale_size_identity() +
+  coord_fixed(ratio = 1, xlim = c(0, W), ylim = c(0, H), expand = FALSE) +
+  theme_void() +
+  theme(plot.background  = element_rect(fill = PAGE, colour = NA),
+        panel.background = element_rect(fill = PAGE, colour = NA))
+
+p
+```
+
+# -- 7. Save -------------------------------------------------------------------
+
+```{r save}
+if (save_fig) {
+  dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+  png_path <- file.path(out_dir, paste0(fig_stem, ".png"))
+  pdf_path <- file.path(out_dir, paste0(fig_stem, ".pdf"))
+  fig_h <- 13.333 * H / W   # keep the saved aspect exact as the layout height changes
+  # PNG: ragg if present, else base png with cairo (type is ignored by ragg - harmless)
+  ggsave(png_path, p, width = 13.333, height = fig_h, dpi = 300, type = "cairo")
+  # PDF: cairo_pdf renders the UTF-8 glyphs correctly
+  ggsave(pdf_path, p, width = 13.333, height = fig_h, device = cairo_pdf)
+  message("Wrote:\n  ", png_path, "\n  ", pdf_path)
+}
+```
